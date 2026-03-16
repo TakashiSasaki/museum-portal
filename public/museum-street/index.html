@@ -10,120 +10,7 @@
     <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
     <link rel="canonical" href="https://museum-portal.moukaeritai.work/museum-street/" />
     <link rel="manifest" href="/manifest.json">
-    <style>
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            color: #e2e8f0;
-            background-color: #050510;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
-        }
-        
-        @keyframes cosmicFlow {
-            0% { transform: scale(1) translate(0, 0); opacity: 0.3; }
-            50% { transform: scale(1.1) translate(3%, 3%); opacity: 0.5; }
-            100% { transform: scale(1) translate(0, 0); opacity: 0.3; }
-        }
-
-        @keyframes deepAbyss {
-            0% { transform: rotate(0deg) scale(1); }
-            50% { transform: rotate(180deg) scale(1.2); }
-            100% { transform: rotate(360deg) scale(1); }
-        }
-
-        .nebula-layer {
-            position: fixed;
-            inset: -50%;
-            background: 
-                radial-gradient(circle at 30% 30%, rgba(88, 28, 135, 0.4) 0%, transparent 40%),
-                radial-gradient(circle at 70% 60%, rgba(2, 66, 82, 0.4) 0%, transparent 45%),
-                radial-gradient(circle at 50% 80%, rgba(15, 23, 42, 0.8) 0%, transparent 60%);
-            z-index: -30;
-            animation: deepAbyss 40s linear infinite;
-            pointer-events: none;
-        }
-
-        .star-dust {
-            position: fixed;
-            inset: 0;
-            z-index: -20;
-            background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noise)" opacity="0.3"/%3E%3C/svg%3E');
-            mix-blend-mode: color-dodge;
-            opacity: 0.15;
-            pointer-events: none;
-        }
-
-        .cosmic-card {
-            position: relative;
-            overflow: hidden;
-            background: rgba(15, 20, 35, 0.4);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-            border-left: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 16px;
-            box-shadow: 
-                0 15px 35px rgba(0, 0, 0, 0.6),
-                inset 0 0 20px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .cosmic-card::before {
-            content: '';
-            position: absolute;
-            top: -50%; left: -50%; width: 200%; height: 200%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 60%);
-            animation: cosmicFlow 10s infinite alternate ease-in-out;
-            pointer-events: none;
-        }
-        
-        .cosmic-card:active, .museum-item:active {
-            transform: translateY(2px) scale(0.97);
-            background: rgba(20, 25, 45, 0.6);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.8);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .plasma-sphere {
-            position: relative;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 
-                0 0 15px currentColor,
-                inset 0 2px 5px rgba(255, 255, 255, 0.6),
-                inset 0 -5px 15px rgba(0, 0, 0, 0.5);
-            transition: transform 0.3s ease, filter 0.3s ease;
-        }
-
-        .plasma-sphere::after {
-            content: '';
-            position: absolute;
-            top: 8%; left: 15%; width: 35%; height: 35%;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, transparent 100%);
-            border-radius: 50%;
-            filter: blur(1px);
-        }
-
-        .group:hover .plasma-sphere {
-            transform: scale(1.08);
-            filter: brightness(1.2);
-        }
-
-        .icon-glow {
-            filter: drop-shadow(0 0 6px white) drop-shadow(0 0 12px currentColor);
-        }
-        .museum-item.active {
-            background: rgba(40, 50, 80, 0.7);
-            border-color: rgba(100, 120, 255, 0.5);
-            transform: scale(1.02);
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body class="text-slate-200">
 
@@ -192,7 +79,7 @@
                 </div>
                 <div>
                     <h2 class="font-bold text-slate-100">ミウラート・ヴィレッジ</h2>
-                    <p class="text-xs text-slate-400\">三浦美術館の愛称</p>
+                    <p class="text-xs text-slate-400">三浦美術館の愛称</p>
                 </div>
             </a>
             <a href="#" data-page="7" class="museum-item cosmic-card p-4 flex items-center gap-4 group text-red-400">
@@ -201,7 +88,7 @@
                 </div>
                 <div>
                     <h2 class="font-bold text-slate-100">セキ美術館</h2>
-                    <p class="text-xs text-slate-400\">近代日本洋画とガラス作品</p>
+                    <p class="text-xs text-slate-400">近代日本洋画とガラス作品</p>
                 </div>
             </a>
             <a href="#" data-page="8" class="museum-item cosmic-card p-4 flex items-center gap-4 group text-yellow-400">
@@ -210,7 +97,7 @@
                 </div>
                 <div>
                     <h2 class="font-bold text-slate-100">秋山兄弟生誕地</h2>
-                    <p class="text-xs text-slate-400\">日露戦争で活躍した兄弟の軌跡</p>
+                    <p class="text-xs text-slate-400">日露戦争で活躍した兄弟の軌跡</p>
                 </div>
             </a>
             <a href="#" data-page="9" class="museum-item cosmic-card p-4 flex items-center gap-4 group text-teal-400">
@@ -219,7 +106,7 @@
                 </div>
                 <div>
                     <h2 class="font-bold text-slate-100">二之丸史跡庭園</h2>
-                    <p class="text-xs text-slate-400\">恋人の聖地、安らぎの庭園</p>
+                    <p class="text-xs text-slate-400">恋人の聖地、安らぎの庭園</p>
                 </div>
             </a>
             <a href="#" data-page="10" class="museum-item cosmic-card p-4 flex items-center gap-4 group text-indigo-400">
@@ -228,7 +115,7 @@
                 </div>
                 <div>
                     <h2 class="font-bold text-slate-100">愛媛大学ミュージアム</h2>
-                    <p class="text-xs text-slate-400\">大学の知を結集した博物館</p>
+                    <p class="text-xs text-slate-400">大学の知を結集した博物館</p>
                 </div>
             </a>
         </nav>
@@ -241,58 +128,6 @@
 
     </div>
 
-    <script>
-        lucide.createIcons();
-
-        const museumItems = document.querySelectorAll('.museum-item');
-        const iframe = document.getElementById('content-frame');
-        const baseUrl = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
-
-        const loadContent = (page) => {
-            const url = `${baseUrl}?page=${page}&mime=text/plain`;
-            iframe.src = 'about:blank';
-            iframe.srcdoc = `<div style="color: #94a3b8; display: flex; justify-content: center; align-items: center; height: 100%; font-family: sans-serif;">読み込み中...</div>`;
-
-            fetch(url)
-                .then(response => response.text())
-                .then(html => {
-                    const styledHtml = \`
-                        <style>
-                            body { 
-                                color: #e2e8f0; 
-                                background-color: transparent;
-                                font-family: 'Noto Sans JP', sans-serif;
-                                padding: 1rem;
-                            } 
-                            a { color: #60a5fa; }
-                            h1, h2, h3, h4, h5, h6 { border-color: rgba(255,255,255,0.2); }
-                        </style>
-                        \${html}
-                    \`;
-                    iframe.srcdoc = styledHtml;
-                })
-                .catch(error => {
-                    console.error('Error fetching content:', error);
-                    iframe.srcdoc = \`<div style="color: #f87171; display: flex; justify-content: center; align-items: center; height: 100%;">コンテンツの読み込みに失敗しました。</div>\`;
-                });
-        };
-
-        museumItems.forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                
-                museumItems.forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-
-                const page = item.getAttribute('data-page');
-                loadContent(page);
-            });
-        });
-
-        if (museumItems.length > 0) {
-            museumItems[0].classList.add('active');
-            loadContent(museumItems[0].getAttribute('data-page'));
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
