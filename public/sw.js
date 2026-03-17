@@ -48,12 +48,40 @@ const API_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 // --------------------------------------------------
 
 // INSTALL: Cache the core assets of the application shell.
+// This version handles cross-origin assets gracefully.
 self.addEventListener('install', (evt) => {
   console.log('[ServiceWorker] Install event started.');
   evt.waitUntil(
     caches.open(CORE_CACHE_NAME).then((cache) => {
       console.log('[ServiceWorker] Caching core application shell assets...');
-      return cache.addAll(CORE_ASSETS_TO_CACHE);
+      
+      const cachePromises = CORE_ASSETS_TO_CACHE.map((assetUrl) => {
+        // Use a function to handle caching for each asset individually.
+        return (async () => {
+          try {
+            // For cross-origin assets (like fonts, CDN scripts), we must use a 'no-cors' request.
+            // The resulting response will be 'opaque', but it's better than a failed installation.
+            const request = assetUrl.startsWith('http') 
+              ? new Request(assetUrl, { mode: 'no-cors' }) 
+              : new Request(assetUrl);
+              
+            const response = await fetch(request);
+            
+            // For opaque responses (type 'opaque', status 0) or successful responses (status 200),
+            // we proceed to cache them.
+            if (response.status === 200 || response.type === 'opaque') {
+              await cache.put(assetUrl, response);
+            } else {
+              console.warn(`[ServiceWorker] Skipped caching ${assetUrl} - non-ok status: ${response.status}`);
+            }
+          } catch (err) {
+            // Log a warning but don't let a single failed asset stop the whole installation.
+            console.warn(`[ServiceWorker] Failed to fetch and cache '${assetUrl}'.`, err);
+          }
+        })();
+      });
+
+      return Promise.all(cachePromises);
     })
   );
   self.skipWaiting(); // Activate the new service worker immediately.
