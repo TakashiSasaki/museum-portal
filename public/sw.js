@@ -5,7 +5,7 @@
 // --------------------------------------------------
 
 // Cache versioning. Increment this to force an update of cached core assets.
-const CORE_CACHE_VERSION = 'v3'; // Incremented due to new asset
+const CORE_CACHE_VERSION = 'v4'; // Incremented due to new assets
 const API_CACHE_VERSION = 'v1';
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -23,6 +23,16 @@ const CORE_ASSETS_TO_CACHE = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon.png',
+  '/museum-street/events/01-events.html',
+  '/museum-street/events/02-events.html',
+  '/museum-street/events/03-events.html',
+  '/museum-street/events/04-events.html',
+  '/museum-street/events/05-events.html',
+  '/museum-street/events/06-events.html',
+  '/museum-street/events/07-events.html',
+  '/museum-street/events/08-events.html',
+  '/museum-street/events/09-events.html',
+  '/museum-street/events/10-events.html',
   'https://cdn.tailwindcss.com',
   // Font for main page
   'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap',
