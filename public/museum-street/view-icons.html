@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アイコン一覧 | ミュージアムストリート</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            background-color: #f0f2f5;
+        }
+        .icon-glow {
+            filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.3));
+        }
+        .icon-wrapper {
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .icon-wrapper:hover {
+            transform: scale(1.05);
+        }
+        .icon-selected {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.7);
+            transform: scale(1.05);
+        }
+        /* Color input focus ring */
+        input[type="color"]:focus-visible {
+            outline: 2px solid rgba(59, 130, 246, 0.7);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">登録アイコン一覧</h1>
+            <p class="text-gray-600">アイコンをクリックすると、下のボックスにSVGコードが表示されます。</p>
+            
+            <!-- 色選択機能 -->
+            <div class="mt-6 flex flex-wrap gap-x-8 gap-y-4">
+                <div>
+                    <label for="bg-color-picker" class="block text-sm font-medium text-gray-700">背景色:</label>
+                    <input type="color" id="bg-color-picker" value="#1f2937" class="mt-1 h-10 w-16 cursor-pointer rounded-md border-gray-300">
+                </div>
+                <div>
+                    <label for="icon-color-picker" class="block text-sm font-medium text-gray-700">アイコン色:</label>
+                    <input type="color" id="icon-color-picker" value="#ffffff" class="mt-1 h-10 w-16 cursor-pointer rounded-md border-gray-300">
+                </div>
+            </div>
+        </header>
+
+        <div id="icon-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+            <!-- アイコンはここに動的に読み込まれます -->
+        </div>
+
+        <!-- SVGコード表示エリア -->
+        <div id="code-display-container" class="mt-12" style="display: none;">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">選択されたアイコンのコード</h2>
+            <div class="bg-gray-900 text-white p-4 rounded-lg relative">
+                <pre><code id="code-output" class="text-green-300 whitespace-pre-wrap break-all"></code></pre>
+                <button id="copy-button" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-1 px-3 rounded text-sm transition-colors">コピー</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="/__/firebase/8.10.1/firebase-app.js"></script>
+    <script src="/__/firebase/8.10.1/firebase-firestore.js"></script>
+    <script src="/__/firebase/init.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const db = firebase.firestore();
+            const iconContainer = document.getElementById('icon-container');
+            const codeDisplayContainer = document.getElementById('code-display-container');
+            const codeOutput = document.getElementById('code-output');
+            const copyButton = document.getElementById('copy-button');
+            const bgColorPicker = document.getElementById('bg-color-picker');
+            const iconColorPicker = document.getElementById('icon-color-picker');
+
+            db.collection("museumIcons").orderBy("__name__").get().then((querySnapshot) => {
+                if (querySnapshot.empty) {
+                    iconContainer.innerHTML = '<p class="text-gray-500 col-span-full">アイコンが見つかりませんでした。</p>';
+                    return;
+                }
+                querySnapshot.forEach((doc) => {
+                    const iconData = doc.data();
+                    const svgContent = iconData.svgContent || '';
+
+                    const iconWrapper = document.createElement('div');
+                    iconWrapper.className = 'icon-wrapper flex flex-col items-center justify-center p-4 bg-white rounded-lg shadow-md';
+                    
+                    const iconDisplay = document.createElement('div');
+                    iconDisplay.className = 'icon-display w-16 h-16 flex items-center justify-center rounded-full mb-3 transition-colors';
+                    iconDisplay.style.backgroundColor = bgColorPicker.value;
+                    
+                    const iconElement = document.createElement('div');
+                    iconElement.className = 'icon-svg-container';
+                    iconElement.style.color = iconColorPicker.value; // SVGのcurrentColorをここで制御
+                    iconElement.innerHTML = svgContent.replace(/class="/, 'class="w-8 h-8 icon-glow "');
+                    
+                    iconDisplay.appendChild(iconElement);
+
+                    const iconId = document.createElement('p');
+                    iconId.className = 'text-sm font-semibold text-gray-700';
+                    iconId.textContent = `ID: ${doc.id}`;
+
+                    iconWrapper.appendChild(iconDisplay);
+                    iconWrapper.appendChild(iconId);
+                    iconContainer.appendChild(iconWrapper);
+
+                    iconWrapper.addEventListener('click', () => {
+                        document.querySelectorAll('.icon-selected').forEach(el => el.classList.remove('icon-selected'));
+                        iconWrapper.classList.add('icon-selected');
+                        codeDisplayContainer.style.display = 'block';
+                        codeOutput.textContent = svgContent;
+                        copyButton.textContent = 'コピー';
+                    });
+                });
+                lucide.createIcons();
+
+            }).catch((error) => {
+                console.error("Error getting documents: ", error);
+                iconContainer.innerHTML = '<p class="text-red-500 col-span-full">アイコンの読み込みに失敗しました。</p>';
+            });
+
+            // 背景色ピッカーのイベント
+            bgColorPicker.addEventListener('input', (event) => {
+                const newColor = event.target.value;
+                document.querySelectorAll('.icon-display').forEach(display => {
+                    display.style.backgroundColor = newColor;
+                });
+            });
+
+            // アイコン色ピッカーのイベント
+            iconColorPicker.addEventListener('input', (event) => {
+                const newColor = event.target.value;
+                document.querySelectorAll('.icon-svg-container').forEach(svgContainer => {
+                    svgContainer.style.color = newColor;
+                });
+            });
+
+            // コピーボタンのクリックイベント
+            copyButton.addEventListener('click', () => {
+                navigator.clipboard.writeText(codeOutput.textContent).then(() => {
+                    copyButton.textContent = 'コピー完了!';
+                }).catch(err => {
+                    console.error('Failed to copy text: ', err);
+                    copyButton.textContent = '失敗';
+                });
+            });
+        });
+    </script>
+
+</body>
+</html>
