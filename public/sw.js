@@ -4,16 +4,14 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v5'; // Incremented to improve caching strategy
-const API_CACHE_VERSION = 'v1';
+const CORE_CACHE_VERSION = 'v5';
+const API_CACHE_VERSION = 'v2'; // Updated due to strategy change for API content
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
 const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
 
-// Assets that are fundamental to the app's shell. These are cached on install.
-// Other pages and assets will be cached on-the-fly when visited.
 const CORE_ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -22,12 +20,10 @@ const CORE_ASSETS_TO_CACHE = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon.png',
-  // Key museum street pages and assets
   '/museum-street/',
   '/museum-street/index.html',
   '/museum-street/script.js',
   '/museum-street/style.css',
-  // All event pages
   '/museum-street/events/01-events.html',
   '/museum-street/events/02-events.html',
   '/museum-street/events/03-events.html',
@@ -38,14 +34,11 @@ const CORE_ASSETS_TO_CACHE = [
   '/museum-street/events/08-events.html',
   '/museum-street/events/09-events.html',
   '/museum-street/events/10-events.html',
-  // External assets
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap',
   'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&display=swap',
   'https://unpkg.com/lucide@latest'
 ];
-
-const API_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 
 // 2. Event Listeners
 // --------------------------------------------------
@@ -99,11 +92,10 @@ self.addEventListener('activate', (evt) => {
   self.clients.claim();
 });
 
-// FETCH: Intercept network requests to apply caching strategies.
 self.addEventListener('fetch', (evt) => {
   const { request } = evt;
 
-  // Strategy 1: API requests (Cache with TTL, falling back to network)
+  // Strategy 1: API requests for iframe content (Cache-First)
   if (request.url.startsWith(API_URL)) {
     evt.respondWith(handleApiRequest(request));
     return;
@@ -111,124 +103,104 @@ self.addEventListener('fetch', (evt) => {
 
   // Strategy 2: Navigation requests (Network-first, then cache, then offline page)
   if (request.mode === 'navigate') {
-    evt.respondWith(
-      (async () => {
-        try {
-          // Try network first
-          const networkResponse = await fetch(request);
-
-          // If successful, cache the response for future offline use
-          const cache = await caches.open(CORE_CACHE_NAME);
-          cache.put(request, networkResponse.clone());
-          
-          return networkResponse;
-        } catch (error) {
-          // If network fails, try to serve from the cache
-          console.log(`[ServiceWorker] Network failed for navigation to ${request.url}. Trying cache.`);
-          const cachedResponse = await caches.match(request);
-          if (cachedResponse) {
-            console.log(`[ServiceWorker] Serving navigation from cache: ${request.url}`);
-            return cachedResponse;
-          }
-          // If not in cache, serve the generic offline page
-          console.log(`[ServiceWorker] No cache match for navigation. Serving offline fallback page.`);
-          return caches.match('/offline.html');
-        }
-      })()
-    );
+    evt.respondWith(handleNavigationRequest(request));
     return;
   }
 
-  // Strategy 3: Static assets (CSS, JS, Fonts, Images) (Cache-first, then network and update)
-  evt.respondWith(
-    (async () => {
-      const cachedResponse = await caches.match(request);
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      
-      const networkResponse = await fetch(request);
-      // For external assets fetched with no-cors, we get an opaque response.
-      // We should cache these as they are important for the app shell.
-      if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
-        const cache = await caches.open(CORE_CACHE_NAME);
-        cache.put(request, networkResponse.clone());
-      }
-      return networkResponse;
-    })()
-  );
+  // Strategy 3: Static assets (CSS, JS, Fonts, Images) (Cache-first)
+  evt.respondWith(handleStaticAssetRequest(request));
 });
 
 
-// 3. Caching Strategies
+// 3. Caching Strategy Implementations
 // --------------------------------------------------
 
 /**
- * Handles API requests with a "Cache falling back to Network" strategy with a Time-To-Live (TTL).
- * 1. Try to serve a FRESH response from the cache (younger than 1 hour).
- * 2. If not available, fetch from the network and update the cache.
- * 3. If network fails, serve a STALE response from the cache as a last resort.
+ * Handles API requests (for iframe content) with a "Cache First" strategy.
+ * 1. Try to serve a response from the cache.
+ * 2. If not available, fetch from the network, cache it, and then serve it.
  */
 async function handleApiRequest(request) {
   const cache = await caches.open(API_CACHE_NAME);
   const cachedResponse = await cache.match(request);
 
   if (cachedResponse) {
-    const cacheTimestamp = new Date(cachedResponse.headers.get('date')).getTime();
-    const isFresh = (Date.now() - cacheTimestamp) < API_CACHE_MAX_AGE_MS;
-    if (isFresh) {
-      console.log(`[ServiceWorker] API CACHE HIT (FRESH): ${request.url}`);
-      return cachedResponse;
-    }
+    console.log(`[ServiceWorker] API CACHE HIT: ${request.url}`);
+    return cachedResponse;
   }
 
-  console.log(`[ServiceWorker] API CACHE MISS or STALE. Fetching from network: ${request.url}`);
+  console.log(`[ServiceWorker] API CACHE MISS. Fetching from network: ${request.url}`);
   try {
     const networkResponse = await fetch(request);
+    
     if (networkResponse && networkResponse.status === 200) {
-      await cacheApiResponse(request, networkResponse.clone());
+      await cache.put(request, networkResponse.clone());
+      console.log(`[ServiceWorker] Caching new API response for: ${request.url}`);
     }
+
     return networkResponse;
   } catch (error) {
-    console.warn(`[ServiceWorker] Network fetch failed for ${request.url}.`, error);
-    if (cachedResponse) {
-      console.log(`[ServiceWorker] Serving STALE response from cache as fallback: ${request.url}`);
-      return cachedResponse; // Fallback to the old, stale response.
-    }
-    return new Response(JSON.stringify({ error: 'Offline and no data in cache.' }), {
+    console.error(`[ServiceWorker] Network fetch failed for API request with no cache fallback: ${request.url}`, error);
+    return new Response('Content failed to load. Please check your connection.', {
       status: 503,
       statusText: 'Service Unavailable',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'text/plain' }
     });
   }
 }
 
-// 4. Utility Functions
-// --------------------------------------------------
+/**
+ * Handles navigation requests with a "Network First" strategy.
+ * This ensures users get the latest version of the page if they are online.
+ */
+async function handleNavigationRequest(request) {
+  try {
+    // Try network first
+    const networkResponse = await fetch(request);
+
+    // If successful, cache the response for future offline use
+    const cache = await caches.open(CORE_CACHE_NAME);
+    cache.put(request, networkResponse.clone());
+    
+    return networkResponse;
+  } catch (error) {
+    // If network fails, try to serve from the cache
+    console.log(`[ServiceWorker] Network failed for navigation. Trying cache for: ${request.url}`);
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    // If not in cache, serve the generic offline page
+    return caches.match('/offline.html');
+  }
+}
 
 /**
- * Clones a response, adds a 'date' header, and puts it into the API cache.
+ * Handles static asset requests with a "Cache First" strategy.
+ * This is for assets like CSS, JS, fonts, and images.
  */
-async function cacheApiResponse(request, response) {
-  const cache = await caches.open(API_CACHE_NAME);
-  const responseToCache = response.clone();
-  
-  const modifiableHeaders = new Headers();
-  responseToCache.headers.forEach((value, key) => {
-    modifiableHeaders.append(key, value);
-  });
-  modifiableHeaders.set('date', new Date().toUTCString());
-
-  const cacheableBody = await responseToCache.blob();
-  const cacheableResponse = new Response(cacheableBody, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: modifiableHeaders
-  });
-
-  console.log(`[ServiceWorker] Caching API response for: ${request.url}`);
-  await cache.put(request, cacheableResponse);
+async function handleStaticAssetRequest(request) {
+    const cachedResponse = await caches.match(request, {ignoreSearch: true});
+    if (cachedResponse) {
+        return cachedResponse;
+    }
+    
+    try {
+        const networkResponse = await fetch(request);
+        if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+            const cache = await caches.open(CORE_CACHE_NAME);
+            await cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+    } catch(e) {
+        console.error(`[SW] Failed to fetch static asset: ${request.url}`, e)
+        // For assets, we don't return a fallback, just let the request fail.
+    }
 }
+
+
+// 4. Utility Functions
+// --------------------------------------------------
 
 /**
  * Fetches and caches the first 10 pages of API content in the background.
@@ -236,34 +208,24 @@ async function cacheApiResponse(request, response) {
 async function precacheApiContent() {
   console.log('[ServiceWorker] Starting background API pre-caching for pages 1-10.');
   const cache = await caches.open(API_CACHE_NAME);
-  const promises = [];
-
+  
   for (let i = 1; i <= 10; i++) {
     const url = `${API_URL}?page=${i}&mime=text/plain`;
     const request = new Request(url);
 
-    const promise = cache.match(request).then(async (cachedResponse) => {
-      let isStale = true;
-      if (cachedResponse) {
-          const cacheTimestamp = new Date(cachedResponse.headers.get('date')).getTime();
-          isStale = (Date.now() - cacheTimestamp) > API_CACHE_MAX_AGE_MS;
+    // Only fetch and cache if it's not already in the cache.
+    const cachedResponse = await cache.match(request);
+    if (!cachedResponse) {
+      console.log(`[ServiceWorker] Pre-caching API content for page ${i}`);
+      try {
+          const networkResponse = await fetch(request);
+          if (networkResponse && networkResponse.status === 200) {
+             await cache.put(request, networkResponse);
+          }
+      } catch(e) {
+          console.warn(`[ServiceWorker] Failed to pre-cache API content for page ${i}`, e);
       }
-
-      if (!cachedResponse || isStale) {
-        console.log(`[ServiceWorker] Pre-caching API content for page ${i}`);
-        try {
-            const networkResponse = await fetch(request);
-            if (networkResponse && networkResponse.status === 200) {
-               await cacheApiResponse(request, networkResponse);
-            }
-        } catch(e) {
-            console.warn(`[ServiceWorker] Failed to pre-cache API content for page ${i}`, e);
-        }
-      }
-    });
-    promises.push(promise);
+    }
   }
-
-  await Promise.all(promises);
   console.log('[ServiceWorker] Background API pre-caching finished.');
 }
