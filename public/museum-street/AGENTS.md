@@ -35,6 +35,7 @@ A dedicated utility page, `public/museum-street/view-icons.html`, exists for dev
 -   **Purpose**: This page provides a user-friendly interface to view, edit, and update the `svgContent` and `backgroundColor` for every icon directly in Firestore.
 -   **Audience**: This page is for developers and content managers only. It is not part of the public-facing application.
 -   **Functionality**: It listens to real-time updates from Firestore and provides text areas and input fields to modify the data, with a "Save" button to push changes back to the database.
+-   **Layout Preservation**: The current layout of the editor is considered highly effective and user-friendly. Future modifications should aim to preserve this layout: a multi-column grid where each card contains a live preview, input fields for `backgroundColor` and `svgContent`, and a save button.
 
 ## 4. Modular Content with iFrames
 
