@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v7'; // Updated to ignore non-GET requests
+const CORE_CACHE_VERSION = 'v8'; // Updated to ignore Firestore URLs
 const API_CACHE_VERSION = 'v2'; 
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -95,7 +95,13 @@ self.addEventListener('activate', (evt) => {
 self.addEventListener('fetch', (evt) => {
   const { request } = evt;
 
-  // IMPORTANT: Let non-GET requests (like Firestore's POSTs) pass through without interference.
+  // Strategy 0: Ignore Firestore and other Google API requests.
+  // Let the Firebase SDK handle these requests with its own offline logic.
+  if (request.url.includes('googleapis.com')) {
+    return;
+  }
+
+  // Let non-GET requests (like potential future POSTs) pass through without interference.
   if (request.method !== 'GET') {
     return;
   }
@@ -187,7 +193,6 @@ async function handleStaticAssetRequest(request) {
         return networkResponse;
     } catch(e) {
         console.error(`[SW] Failed to fetch static asset: ${request.url}`, e);
-        // Return a proper error response instead of undefined
         return new Response(`Failed to fetch ${request.url}`, { status: 500 });
     }
 }
