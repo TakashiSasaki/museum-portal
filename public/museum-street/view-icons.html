@@ -41,7 +41,7 @@
             for (const id in museumData) {
                 const card = document.createElement('div');
                 card.id = `card-${id}`;
-                card.className = 'bg-gray-800 rounded-lg shadow-lg p-5 flex flex-col transition-all duration-300 border-2 border-transparent'; // Added border for feedback
+                card.className = 'bg-gray-800 rounded-lg shadow-lg p-5 flex flex-col transition-all duration-300 border-2 border-transparent';
                 card.innerHTML = `<h2 class="text-xl font-semibold mb-4 text-gray-400">${museumData[id].name} (ID: ${id})</h2><p class="text-gray-500">Loading...</p>`;
                 container.appendChild(card);
             }
@@ -65,7 +65,6 @@
 
                 card.innerHTML = `
                     <h2 class="text-xl font-semibold mb-4">${museumData[docId].name} <span class="text-sm text-gray-500 font-mono">(ID: ${docId})</span></h2>
-                    
                     <div class="flex gap-4 items-start">
                         <div class="flex-shrink-0">
                             <p class="text-xs text-gray-400 mb-1">Preview</p>
@@ -89,10 +88,24 @@
                     </div>
                 `;
 
+                // --- Real-time Preview Logic --- 
+                const bgColorInput = card.querySelector(`#bgColor-${docId}`);
+                const svgTextarea = card.querySelector(`#svg-${docId}`);
+                const previewDiv = card.querySelector(`#preview-${docId}`);
+
+                bgColorInput.addEventListener('input', () => {
+                    previewDiv.style.backgroundColor = bgColorInput.value;
+                });
+
+                svgTextarea.addEventListener('input', () => {
+                    previewDiv.innerHTML = svgTextarea.value;
+                });
+
+                // --- Save Logic --- 
                 const saveButton = card.querySelector(`#save-${docId}`);
                 saveButton.addEventListener('click', () => {
-                    const newBgColor = card.querySelector(`#bgColor-${docId}`).value;
-                    const newSvgContent = card.querySelector(`#svg-${docId}`).value;
+                    const newBgColor = bgColorInput.value;
+                    const newSvgContent = svgTextarea.value;
 
                     const dataToUpdate = {
                         backgroundColor: newBgColor,
@@ -107,9 +120,6 @@
                             console.log(`Document ${docId} successfully updated.`);
                             card.classList.remove('border-yellow-500');
                             card.classList.add('border-green-500'); // Success feedback
-                            // Update preview
-                            card.querySelector(`#preview-${docId}`).style.backgroundColor = newBgColor;
-                            card.querySelector(`#preview-${docId}`).innerHTML = newSvgContent;
                         })
                         .catch(error => {
                             console.error("Error updating document: ", error);
