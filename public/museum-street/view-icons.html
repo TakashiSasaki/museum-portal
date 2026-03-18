@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Museum Icons Viewer</title>
+    <title>Museum Icons Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase SDK -->
     <script src="/__/firebase/8.10.1/firebase-app.js"></script>
@@ -11,10 +11,11 @@
     <script src="/__/firebase/init.js"></script>
 </head>
 <body class="bg-gray-900 text-white p-8">
-    <div class="max-w-6xl mx-auto">
-        <h1 class="text-3xl font-bold mb-8">Museum Icons Viewer</h1>
-        <div id="icons-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            <!-- Icons will be loaded here -->
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold mb-2">Museum Icons Editor</h1>
+        <p class="text-gray-400 mb-8">View, edit, and update Firestore data for each museum icon.</p>
+        <div id="icons-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+            <!-- Editor cards will be loaded here -->
         </div>
     </div>
 
@@ -23,94 +24,100 @@
             const db = firebase.firestore();
             const container = document.getElementById('icons-container');
 
-            const defaultColors = {
-                "1": "#235633",  // 県美
-                "2": "#a97f71",  // 萬翠荘
-                "3": "#7bc6fa",  // 坂雲
-                "4": "#7c4846",  // 子規記念博物館
-                "5": "#d58e53",  // 湯築城
-                "6": "#a6373e",  // 三浦アート
-                "7": "#e5d6cd",  // セキ美術館
-                "8": "#fba9ab",  // 秋山兄弟
-                "9": "#1c2d70",  // 二之丸史跡
-                "10": "#aea356"  // 愛媛大学ミュ
+            const museumData = {
+                "1": { name: "愛媛県美術館", defaultColor: "#235633" },
+                "2": { name: "萬翠荘", defaultColor: "#a97f71" },
+                "3": { name: "坂の上の雲ミュージアム", defaultColor: "#7bc6fa" },
+                "4": { name: "子規記念博物館", defaultColor: "#7c4846" },
+                "5": { name: "道後公園 湯築城跡", defaultColor: "#d58e53" },
+                "6": { name: "ミウラート・ヴィレッジ", defaultColor: "#a6373e" },
+                "7": { name: "セキ美術館", defaultColor: "#e5d6cd" },
+                "8": { name: "秋山兄弟生誕地", defaultColor: "#fba9ab" },
+                "9": { name: "二之丸史跡庭園", defaultColor: "#1c2d70" },
+                "10": { name: "愛媛大学ミュージアム", defaultColor: "#aea356" }
             };
 
-            const museumNames = {
-                "1": "愛媛県美術館",
-                "2": "萬翠荘",
-                "3": "坂の上の雲ミュージアム",
-                "4": "子規記念博物館",
-                "5": "道後公園 湯築城跡",
-                "6": "ミウラート・ヴィレッジ",
-                "7": "セキ美術館",
-                "8": "秋山兄弟生誕地",
-                "9": "二之丸史跡庭園",
-                "10": "愛媛大学ミュージアム"
-            };
-
-            // Fetch from cache first, then server
-            const fetchIcons = (source) => {
-                db.collection("museumIcons").get({ source }).then((querySnapshot) => {
-                    if (querySnapshot.empty && source === 'server') {
-                         container.innerHTML = '<p class="text-gray-400 col-span-full">No icons found in Firestore. Make sure the collection \'museumIcons\' exists and has documents.</p>';
-                        return;
-                    }
-                    render(querySnapshot);
-                }).catch(error => {
-                    if (source === 'server') {
-                        console.error(`Error getting documents from ${source}:`, error);
-                        container.innerHTML = `<p class="text-red-400 col-span-full">Error loading icons: ${error.message}</p>`;
-                    }
-                });
+            // Create placeholders for all museums to maintain order
+            for (const id in museumData) {
+                const card = document.createElement('div');
+                card.id = `card-${id}`;
+                card.className = 'bg-gray-800 rounded-lg shadow-lg p-5 flex flex-col transition-all duration-300 border-2 border-transparent'; // Added border for feedback
+                card.innerHTML = `<h2 class="text-xl font-semibold mb-4 text-gray-400">${museumData[id].name} (ID: ${id})</h2><p class="text-gray-500">Loading...</p>`;
+                container.appendChild(card);
             }
 
-            const loadedDocs = new Set();
+            db.collection("museumIcons").onSnapshot(querySnapshot => {
+                querySnapshot.forEach((doc) => {
+                    renderEditorCard(doc);
+                });
+            }, error => {
+                console.error("Error fetching collection: ", error);
+                container.innerHTML = `<p class="text-red-400 col-span-full">Error loading icons: ${error.message}</p>`;
+            });
 
-            const render = (querySnapshot) => {
-                 querySnapshot.forEach((doc) => {
-                    if (loadedDocs.has(doc.id)) return;
+            function renderEditorCard(doc) {
+                const docId = doc.id;
+                const iconData = doc.data() || {};
+                const card = document.getElementById(`card-${docId}`);
+                if (!card) return;
+
+                const currentBgColor = iconData.backgroundColor || museumData[docId].defaultColor;
+
+                card.innerHTML = `
+                    <h2 class="text-xl font-semibold mb-4">${museumData[docId].name} <span class="text-sm text-gray-500 font-mono">(ID: ${docId})</span></h2>
                     
-                    const iconData = doc.data();
-                    const docId = doc.id;
-                    loadedDocs.add(docId);
+                    <div class="flex gap-4 items-start">
+                        <div class="flex-shrink-0">
+                            <p class="text-xs text-gray-400 mb-1">Preview</p>
+                            <div id="preview-${docId}" class="w-24 h-24 rounded-full flex items-center justify-center shadow-inner" style="background-color: ${currentBgColor};">
+                                ${iconData.svgContent || ''}
+                            </div>
+                        </div>
+                        <div class="flex-grow min-w-0">
+                            <div class="mb-4">
+                                <label for="bgColor-${docId}" class="block text-sm font-medium text-gray-300 mb-1">Background Color</label>
+                                <input type="text" id="bgColor-${docId}" value="${currentBgColor}" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                            <div class="mb-4">
+                                <label for="svg-${docId}" class="block text-sm font-medium text-gray-300 mb-1">SVG Content</label>
+                                <textarea id="svg-${docId}" rows="4" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">${iconData.svgContent || ''}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex justify-end">
+                        <button id="save-${docId}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md text-sm transition-colors">Save Changes</button>
+                    </div>
+                `;
 
-                    const bgColor = iconData.backgroundColor || defaultColors[docId] || '333333';
-                    const textColor = iconData.textColor || 'FFFFFF';
+                const saveButton = card.querySelector(`#save-${docId}`);
+                saveButton.addEventListener('click', () => {
+                    const newBgColor = card.querySelector(`#bgColor-${docId}`).value;
+                    const newSvgContent = card.querySelector(`#svg-${docId}`).value;
 
-                    const card = document.createElement('div');
-                    card.className = 'bg-gray-800 rounded-lg p-4 flex flex-col items-center justify-center shadow-lg';
-
-                    const iconWrapper = document.createElement('div');
-                    iconWrapper.className = 'w-24 h-24 rounded-full flex items-center justify-center mb-4';
-                    iconWrapper.style.backgroundColor = `#${bgColor.replace('#', '')}`;
-                    iconWrapper.innerHTML = iconData.svgContent || '<span class="text-gray-500">No SVG</span>';
-
-                    const name = document.createElement('h2');
-                    name.className = 'text-lg font-semibold';
-                    name.textContent = museumNames[docId] || `Museum ${docId}`;
-
-                    const colorInfo = document.createElement('div');
-                    colorInfo.className = 'text-sm text-gray-400 mt-2';
-                    colorInfo.innerHTML = `BG: #${bgColor.replace('#','')} <br> Text: #${textColor.replace('#','')}`;
+                    const dataToUpdate = {
+                        backgroundColor: newBgColor,
+                        svgContent: newSvgContent
+                    };
                     
-                    card.appendChild(iconWrapper);
-                    card.appendChild(name);
-                    card.appendChild(colorInfo);
+                    card.classList.remove('border-green-500', 'border-red-500');
+                    card.classList.add('border-yellow-500'); // Indicate loading
 
-                    // To keep a consistent order, we replace or insert based on ID
-                    const existingCard = container.querySelector(`[data-doc-id="${docId}"]`);
-                    if(existingCard){
-                         container.replaceChild(card, existingCard);
-                    } else {
-                         container.appendChild(card);
-                    }
-                    card.setAttribute('data-doc-id', docId);
+                    db.collection('museumIcons').doc(docId).set(dataToUpdate, { merge: true })
+                        .then(() => {
+                            console.log(`Document ${docId} successfully updated.`);
+                            card.classList.remove('border-yellow-500');
+                            card.classList.add('border-green-500'); // Success feedback
+                            // Update preview
+                            card.querySelector(`#preview-${docId}`).style.backgroundColor = newBgColor;
+                            card.querySelector(`#preview-${docId}`).innerHTML = newSvgContent;
+                        })
+                        .catch(error => {
+                            console.error("Error updating document: ", error);
+                            card.classList.remove('border-yellow-500');
+                            card.classList.add('border-red-500'); // Error feedback
+                        });
                 });
             }
-
-            fetchIcons('cache');
-            fetchIcons('server');
         });
     </script>
 </body>
