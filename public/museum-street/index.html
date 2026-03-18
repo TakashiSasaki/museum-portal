@@ -138,58 +138,53 @@
             const db = firebase.firestore();
             const navContainer = document.getElementById('museum-nav');
             
-            const museumNames = {
-                "1": "愛媛県美術館",
-                "2": "萬翠荘",
-                "3": "坂の上の雲ミュージアム",
-                "4": "子規記念博物館",
-                "5": "道後公園 湯築城跡",
-                "6": "ミウラート・ヴィレッジ",
-                "7": "セキ美術館",
-                "8": "秋山兄弟生誕地",
-                "9": "二之丸史跡庭園",
-                "10": "愛媛大学ミュージアム"
-            };
-
-            const defaultColors = {
-                "1": "3b82f6", "2": "8b5cf6", "3": "0ea5e9", "4": "22c55e", "5": "84cc16", "6": "f97316", "7": "ef4444", "8": "eab308", "9": "14b8a6", "10": "6366f1"
-            };
-
-            // Firestoreからアイコンデータを取得
-            db.collection("museumIcons").get().then((querySnapshot) => {
+            // まずはローカルのキャッシュ（すでにIndexedDBに保存されているはず）から取得して表示
+            db.collection("museumIcons").get({ source: 'cache' }).then((querySnapshot) => {
                 if (!querySnapshot.empty) {
-                    querySnapshot.forEach((doc) => {
-                        const iconData = doc.data();
-                        const docId = doc.id;
-                        
-                        // 既存のナビゲーションアイテムを探す
-                        const existingLink = navContainer.querySelector(`[data-page="${docId}"]`);
-                        
-                        if (existingLink) {
-                            const iconContainer = existingLink.querySelector('.plasma-sphere');
-                            if (iconContainer) {
-                                // FirestoreにSVGデータがあれば置換
-                                if (iconData.svgContent) {
-                                    iconContainer.innerHTML = iconData.svgContent;
-                                }
-                                
-                                // 背景色を適用
-                                const bgColorHex = iconData.backgroundColor || defaultColors[docId];
-                                // デフォルトのグラデーションクラスを削除して、単色背景を適用する
-                                iconContainer.className = 'plasma-sphere w-12 h-12 flex-shrink-0'; 
-                                iconContainer.style.backgroundColor = '#' + bgColorHex.replace('#', ''); 
-                            }
-                        }
-                    });
-                    
-                    // Lucideアイコンを再描画 (初期アイコンまたはFirestoreからのSVG内にlucideクラスがある場合)
-                    if (typeof lucide !== 'undefined') {
-                        lucide.createIcons();
-                    }
+                    renderIcons(querySnapshot);
                 }
             }).catch((error) => {
-                console.error("Error fetching museum icons:", error);
+                console.log("Error getting cached documents:", error);
             });
+
+            // バックグラウンドで最新のデータを取得して更新
+            db.collection("museumIcons").get({ source: 'server' }).then((querySnapshot) => {
+                if (!querySnapshot.empty) {
+                    renderIcons(querySnapshot);
+                }
+            }).catch((error) => {
+                console.error("Error fetching museum icons from server:", error);
+            });
+
+            function renderIcons(querySnapshot) {
+                const defaultColors = {
+                    "1": "#3b82f6", "2": "#8b5cf6", "3": "#0ea5e9", "4": "#22c55e", "5": "#84cc16", "6": "#f97316", "7": "#ef4444", "8": "#eab308", "9": "#14b8a6", "10": "#6366f1"
+                };
+
+                querySnapshot.forEach((doc) => {
+                    const iconData = doc.data();
+                    const docId = doc.id;
+                    
+                    const existingLink = navContainer.querySelector(`[data-page="${docId}"]`);
+                    
+                    if (existingLink) {
+                        const iconContainer = existingLink.querySelector('.plasma-sphere');
+                        if (iconContainer) {
+                            if (iconData.svgContent) {
+                                iconContainer.innerHTML = iconData.svgContent;
+                            }
+                            
+                            const bgColorHex = iconData.backgroundColor || defaultColors[docId];
+                            iconContainer.className = 'plasma-sphere w-12 h-12 flex-shrink-0'; 
+                            iconContainer.style.backgroundColor = '#' + bgColorHex.replace('#', ''); 
+                        }
+                    }
+                });
+                
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            }
         });
     </script>
 </body>
