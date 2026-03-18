@@ -4,17 +4,16 @@
 // 1. Configuration
 // --------------------------------------------------
 
-// Cache versioning. Increment this to force an update of cached core assets.
-const CORE_CACHE_VERSION = 'v4'; // Incremented due to new assets
+const CORE_CACHE_VERSION = 'v5'; // Incremented to improve caching strategy
 const API_CACHE_VERSION = 'v1';
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
 const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
 
-// The base URL for the API content
 const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
 
-// Assets that are fundamental to the app's shell
+// Assets that are fundamental to the app's shell. These are cached on install.
+// Other pages and assets will be cached on-the-fly when visited.
 const CORE_ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -23,6 +22,12 @@ const CORE_ASSETS_TO_CACHE = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon.png',
+  // Key museum street pages and assets
+  '/museum-street/',
+  '/museum-street/index.html',
+  '/museum-street/script.js',
+  '/museum-street/style.css',
+  // All event pages
   '/museum-street/events/01-events.html',
   '/museum-street/events/02-events.html',
   '/museum-street/events/03-events.html',
@@ -33,61 +38,46 @@ const CORE_ASSETS_TO_CACHE = [
   '/museum-street/events/08-events.html',
   '/museum-street/events/09-events.html',
   '/museum-street/events/10-events.html',
+  // External assets
   'https://cdn.tailwindcss.com',
-  // Font for main page
   'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap',
-  // Font for event pages
   'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&display=swap',
   'https://unpkg.com/lucide@latest'
 ];
 
-// API cache settings
 const API_CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 
 // 2. Event Listeners
 // --------------------------------------------------
 
-// INSTALL: Cache the core assets of the application shell.
-// This version handles cross-origin assets gracefully.
 self.addEventListener('install', (evt) => {
   console.log('[ServiceWorker] Install event started.');
   evt.waitUntil(
     caches.open(CORE_CACHE_NAME).then((cache) => {
       console.log('[ServiceWorker] Caching core application shell assets...');
-      
       const cachePromises = CORE_ASSETS_TO_CACHE.map((assetUrl) => {
-        // Use a function to handle caching for each asset individually.
         return (async () => {
           try {
-            // For cross-origin assets (like fonts, CDN scripts), we must use a 'no-cors' request.
-            // The resulting response will be 'opaque', but it's better than a failed installation.
             const request = assetUrl.startsWith('http') 
               ? new Request(assetUrl, { mode: 'no-cors' }) 
               : new Request(assetUrl);
-              
             const response = await fetch(request);
-            
-            // For opaque responses (type 'opaque', status 0) or successful responses (status 200),
-            // we proceed to cache them.
             if (response.status === 200 || response.type === 'opaque') {
               await cache.put(assetUrl, response);
             } else {
               console.warn(`[ServiceWorker] Skipped caching ${assetUrl} - non-ok status: ${response.status}`);
             }
           } catch (err) {
-            // Log a warning but don't let a single failed asset stop the whole installation.
             console.warn(`[ServiceWorker] Failed to fetch and cache '${assetUrl}'.`, err);
           }
         })();
       });
-
       return Promise.all(cachePromises);
     })
   );
-  self.skipWaiting(); // Activate the new service worker immediately.
+  self.skipWaiting();
 });
 
-// ACTIVATE: Clean up old caches and start delayed pre-caching.
 self.addEventListener('activate', (evt) => {
   console.log('[ServiceWorker] Activate event started.');
   const currentCaches = [CORE_CACHE_NAME, API_CACHE_NAME];
@@ -102,26 +92,73 @@ self.addEventListener('activate', (evt) => {
         })
       );
     }).then(() => {
-      // Start pre-caching API content in the background *after* activation.
-      // This does not block the activation process.
       console.log('[ServiceWorker] Activation complete. Starting API pre-caching in background.');
       precacheApiContent();
     })
   );
-  self.clients.claim(); // Take control of all open clients.
+  self.clients.claim();
 });
 
 // FETCH: Intercept network requests to apply caching strategies.
 self.addEventListener('fetch', (evt) => {
-  // Strategy for API requests: Cache with TTL, falling back to network, with a final fallback to stale cache.
-  if (evt.request.url.startsWith(API_URL)) {
-    evt.respondWith(handleApiRequest(evt.request));
+  const { request } = evt;
+
+  // Strategy 1: API requests (Cache with TTL, falling back to network)
+  if (request.url.startsWith(API_URL)) {
+    evt.respondWith(handleApiRequest(request));
+    return;
   }
-  // Strategy for non-API requests: Cache first, falling back to network.
-  else {
-    evt.respondWith(handleNonApiRequest(evt.request, evt));
+
+  // Strategy 2: Navigation requests (Network-first, then cache, then offline page)
+  if (request.mode === 'navigate') {
+    evt.respondWith(
+      (async () => {
+        try {
+          // Try network first
+          const networkResponse = await fetch(request);
+
+          // If successful, cache the response for future offline use
+          const cache = await caches.open(CORE_CACHE_NAME);
+          cache.put(request, networkResponse.clone());
+          
+          return networkResponse;
+        } catch (error) {
+          // If network fails, try to serve from the cache
+          console.log(`[ServiceWorker] Network failed for navigation to ${request.url}. Trying cache.`);
+          const cachedResponse = await caches.match(request);
+          if (cachedResponse) {
+            console.log(`[ServiceWorker] Serving navigation from cache: ${request.url}`);
+            return cachedResponse;
+          }
+          // If not in cache, serve the generic offline page
+          console.log(`[ServiceWorker] No cache match for navigation. Serving offline fallback page.`);
+          return caches.match('/offline.html');
+        }
+      })()
+    );
+    return;
   }
+
+  // Strategy 3: Static assets (CSS, JS, Fonts, Images) (Cache-first, then network and update)
+  evt.respondWith(
+    (async () => {
+      const cachedResponse = await caches.match(request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      
+      const networkResponse = await fetch(request);
+      // For external assets fetched with no-cors, we get an opaque response.
+      // We should cache these as they are important for the app shell.
+      if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+        const cache = await caches.open(CORE_CACHE_NAME);
+        cache.put(request, networkResponse.clone());
+      }
+      return networkResponse;
+    })()
+  );
 });
+
 
 // 3. Caching Strategies
 // --------------------------------------------------
@@ -158,7 +195,6 @@ async function handleApiRequest(request) {
       console.log(`[ServiceWorker] Serving STALE response from cache as fallback: ${request.url}`);
       return cachedResponse; // Fallback to the old, stale response.
     }
-    // If there's nothing in cache and network fails, return an error response.
     return new Response(JSON.stringify({ error: 'Offline and no data in cache.' }), {
       status: 503,
       statusText: 'Service Unavailable',
@@ -166,32 +202,6 @@ async function handleApiRequest(request) {
     });
   }
 }
-
-/**
- * Handles non-API requests with a "Cache First" strategy.
- * Ideal for application shell assets that only change with new deployments.
- */
-async function handleNonApiRequest(request, evt) {
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-
-  // Fallback to network if not in cache (e.g., for assets not in the initial cache list)
-  try {
-        const networkResponse = await fetch(request);
-        // Don't cache all dynamic non-API requests by default, but you could add logic here if needed.
-        return networkResponse;
-    } catch (error) {
-        // For page navigation requests, show the offline page.
-        if (request.mode === 'navigate') {
-            const offlinePage = await caches.match('/offline.html');
-            return offlinePage;
-        }
-        // For other assets (images, etc.), just fail.
-    }
-}
-
 
 // 4. Utility Functions
 // --------------------------------------------------
@@ -222,7 +232,6 @@ async function cacheApiResponse(request, response) {
 
 /**
  * Fetches and caches the first 10 pages of API content in the background.
- * This runs after the service worker is activated to avoid delaying initial page load.
  */
 async function precacheApiContent() {
   console.log('[ServiceWorker] Starting background API pre-caching for pages 1-10.');
@@ -234,7 +243,6 @@ async function precacheApiContent() {
     const request = new Request(url);
 
     const promise = cache.match(request).then(async (cachedResponse) => {
-      // Only fetch and cache if it's not already in the cache or if it's stale.
       let isStale = true;
       if (cachedResponse) {
           const cacheTimestamp = new Date(cachedResponse.headers.get('date')).getTime();
