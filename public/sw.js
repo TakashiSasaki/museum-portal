@@ -4,8 +4,8 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v5';
-const API_CACHE_VERSION = 'v2'; // Updated due to strategy change for API content
+const CORE_CACHE_VERSION = 'v7'; // Updated to ignore non-GET requests
+const API_CACHE_VERSION = 'v2'; 
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
 const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
@@ -95,6 +95,11 @@ self.addEventListener('activate', (evt) => {
 self.addEventListener('fetch', (evt) => {
   const { request } = evt;
 
+  // IMPORTANT: Let non-GET requests (like Firestore's POSTs) pass through without interference.
+  if (request.method !== 'GET') {
+    return;
+  }
+
   // Strategy 1: API requests for iframe content (Cache-First)
   if (request.url.startsWith(API_URL)) {
     evt.respondWith(handleApiRequest(request));
@@ -117,30 +122,24 @@ self.addEventListener('fetch', (evt) => {
 
 /**
  * Handles API requests (for iframe content) with a "Cache First" strategy.
- * 1. Try to serve a response from the cache.
- * 2. If not available, fetch from the network, cache it, and then serve it.
  */
 async function handleApiRequest(request) {
   const cache = await caches.open(API_CACHE_NAME);
   const cachedResponse = await cache.match(request);
 
   if (cachedResponse) {
-    console.log(`[ServiceWorker] API CACHE HIT: ${request.url}`);
     return cachedResponse;
   }
 
-  console.log(`[ServiceWorker] API CACHE MISS. Fetching from network: ${request.url}`);
   try {
     const networkResponse = await fetch(request);
     
     if (networkResponse && networkResponse.status === 200) {
       await cache.put(request, networkResponse.clone());
-      console.log(`[ServiceWorker] Caching new API response for: ${request.url}`);
     }
 
     return networkResponse;
   } catch (error) {
-    console.error(`[ServiceWorker] Network fetch failed for API request with no cache fallback: ${request.url}`, error);
     return new Response('Content failed to load. Please check your connection.', {
       status: 503,
       statusText: 'Service Unavailable',
@@ -151,33 +150,27 @@ async function handleApiRequest(request) {
 
 /**
  * Handles navigation requests with a "Network First" strategy.
- * This ensures users get the latest version of the page if they are online.
  */
 async function handleNavigationRequest(request) {
   try {
-    // Try network first
-    const networkResponse = await fetch(request);
+    const networkResponse = await fetch(request, { cache: 'no-cache' });
 
-    // If successful, cache the response for future offline use
     const cache = await caches.open(CORE_CACHE_NAME);
-    cache.put(request, networkResponse.clone());
+    await cache.put(request, networkResponse.clone());
     
     return networkResponse;
   } catch (error) {
-    // If network fails, try to serve from the cache
     console.log(`[ServiceWorker] Network failed for navigation. Trying cache for: ${request.url}`);
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
-    // If not in cache, serve the generic offline page
     return caches.match('/offline.html');
   }
 }
 
 /**
  * Handles static asset requests with a "Cache First" strategy.
- * This is for assets like CSS, JS, fonts, and images.
  */
 async function handleStaticAssetRequest(request) {
     const cachedResponse = await caches.match(request, {ignoreSearch: true});
@@ -193,11 +186,11 @@ async function handleStaticAssetRequest(request) {
         }
         return networkResponse;
     } catch(e) {
-        console.error(`[SW] Failed to fetch static asset: ${request.url}`, e)
-        // For assets, we don't return a fallback, just let the request fail.
+        console.error(`[SW] Failed to fetch static asset: ${request.url}`, e);
+        // Return a proper error response instead of undefined
+        return new Response(`Failed to fetch ${request.url}`, { status: 500 });
     }
 }
-
 
 // 4. Utility Functions
 // --------------------------------------------------
@@ -213,7 +206,6 @@ async function precacheApiContent() {
     const url = `${API_URL}?page=${i}&mime=text/plain`;
     const request = new Request(url);
 
-    // Only fetch and cache if it's not already in the cache.
     const cachedResponse = await cache.match(request);
     if (!cachedResponse) {
       console.log(`[ServiceWorker] Pre-caching API content for page ${i}`);
