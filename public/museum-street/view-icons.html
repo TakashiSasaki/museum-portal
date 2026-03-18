@@ -74,8 +74,11 @@
                         </div>
                         <div class="flex-grow min-w-0">
                             <div class="mb-4">
-                                <label for="bgColor-${docId}" class="block text-sm font-medium text-gray-300 mb-1">Background Color</label>
-                                <input type="text" id="bgColor-${docId}" value="${currentBgColor}" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Background Color</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="color" id="colorPicker-${docId}" value="${currentBgColor}" class="p-0 border-none w-10 h-10 rounded-md cursor-pointer">
+                                    <input type="text" id="bgColor-${docId}" value="${currentBgColor}" class="flex-grow bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
                             </div>
                             <div class="mb-4">
                                 <label for="svg-${docId}" class="block text-sm font-medium text-gray-300 mb-1">SVG Content</label>
@@ -88,13 +91,27 @@
                     </div>
                 `;
 
-                // --- Real-time Preview Logic --- 
+                // --- Real-time Preview & Sync Logic --- 
                 const bgColorInput = card.querySelector(`#bgColor-${docId}`);
+                const colorPicker = card.querySelector(`#colorPicker-${docId}`);
                 const svgTextarea = card.querySelector(`#svg-${docId}`);
                 const previewDiv = card.querySelector(`#preview-${docId}`);
 
+                // Sync color picker -> text input & preview
+                colorPicker.addEventListener('input', () => {
+                    const newColor = colorPicker.value;
+                    bgColorInput.value = newColor;
+                    previewDiv.style.backgroundColor = newColor;
+                });
+
+                // Sync text input -> color picker & preview
                 bgColorInput.addEventListener('input', () => {
-                    previewDiv.style.backgroundColor = bgColorInput.value;
+                    const newColor = bgColorInput.value;
+                    previewDiv.style.backgroundColor = newColor;
+                    // Update color picker only if the format is a valid hex
+                    if (/^#[0-9a-f]{6}$/i.test(newColor)) {
+                        colorPicker.value = newColor;
+                    }
                 });
 
                 svgTextarea.addEventListener('input', () => {
