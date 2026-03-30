@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v8'; // Updated to ignore Firestore URLs
+const CORE_CACHE_VERSION = 'v9'; // Incremented to include new index.css/index.js
 const API_CACHE_VERSION = 'v2'; 
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -15,6 +15,8 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP
 const CORE_ASSETS_TO_CACHE = [
   '/',
   '/index.html',
+  '/index.css',
+  '/index.js',
   '/manifest.json',
   '/offline.html',
   '/icons/icon-192.png',

@@ -9,121 +9,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
     <link rel="canonical" href="https://museum-portal.moukaeritai.work/" />
-    <link rel="manifest" href="/manifest.json">
-    <style>
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            color: #e2e8f0;
-            background-color: #050510; /* 深淵の宇宙空間ベース色 */
-            overflow-x: hidden;
-        }
-        
-        /* --- 遠近感を生み出す宇宙の背景アニメーション --- */
-        @keyframes cosmicFlow {
-            0% { transform: scale(1) translate(0, 0); opacity: 0.3; }
-            50% { transform: scale(1.1) translate(3%, 3%); opacity: 0.5; }
-            100% { transform: scale(1) translate(0, 0); opacity: 0.3; }
-        }
-
-        @keyframes deepAbyss {
-            0% { transform: rotate(0deg) scale(1); }
-            50% { transform: rotate(180deg) scale(1.2); }
-            100% { transform: rotate(360deg) scale(1); }
-        }
-
-        /* 遠景：不思議な星雲の光 */
-        .nebula-layer {
-            position: fixed;
-            inset: -50%;
-            background: 
-                radial-gradient(circle at 30% 30%, rgba(88, 28, 135, 0.4) 0%, transparent 40%),
-                radial-gradient(circle at 70% 60%, rgba(2, 66, 82, 0.4) 0%, transparent 45%),
-                radial-gradient(circle at 50% 80%, rgba(15, 23, 42, 0.8) 0%, transparent 60%);
-            z-index: -30;
-            animation: deepAbyss 40s linear infinite;
-            pointer-events: none;
-        }
-
-        /* 中景：星屑（SVGノイズで遠くの銀河を表現） */
-        .star-dust {
-            position: fixed;
-            inset: 0;
-            z-index: -20;
-            background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noise)" opacity="0.3"/%3E%3C/svg%3E');
-            mix-blend-mode: color-dodge;
-            opacity: 0.15;
-            pointer-events: none;
-        }
-
-        /* --- ダーク・グラスモーフィズムのカード --- */
-        .cosmic-card {
-            position: relative;
-            overflow: hidden;
-            background: rgba(15, 20, 35, 0.4); /* 深い闇の半透明 */
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-top: 1px solid rgba(255, 255, 255, 0.15); /* 微かなエッジ光 */
-            border-left: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 20px;
-            box-shadow: 
-                0 15px 35px rgba(0, 0, 0, 0.6), /* 強い浮遊感を生む影 */
-                inset 0 0 20px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* カード内部を漂う微小なエネルギーの波 */
-        .cosmic-card::before {
-            content: '';
-            position: absolute;
-            top: -50%; left: -50%; width: 200%; height: 200%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 60%);
-            animation: cosmicFlow 10s infinite alternate ease-in-out;
-            pointer-events: none;
-        }
-        
-        .cosmic-card:active {
-            transform: translateY(2px) scale(0.97);
-            background: rgba(20, 25, 45, 0.6);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.8);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        /* --- 暗闇で発光するプラズマコア（アイコン） --- */
-        .plasma-sphere {
-            position: relative;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 
-                0 0 25px currentColor,
-                inset 0 2px 5px rgba(255, 255, 255, 0.6),
-                inset 0 -5px 15px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s ease;
-        }
-
-        /* ガラスの鋭いハイライト */
-        .plasma-sphere::after {
-            content: '';
-            position: absolute;
-            top: 8%; left: 15%; width: 35%; height: 35%;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, transparent 100%);
-            border-radius: 50%;
-            filter: blur(1px);
-        }
-
-        .group:hover .plasma-sphere {
-            transform: scale(1.08);
-            filter: brightness(1.2);
-        }
-
-        /* アイコンの強い発光 */
-        .icon-glow {
-            filter: drop-shadow(0 0 6px white) drop-shadow(0 0 12px currentColor);
-        }
-    </style>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="index.css">
 </head>
 <body class="min-h-screen flex flex-col items-center py-8 px-4 relative">
 
@@ -131,7 +18,7 @@
     <div class="star-dust"></div>
 
     <!-- Header Area: 位置関係を元の状態 (1_English 2_Japanese 3_Slogan) へ復元 -->
-    <header class="w-full max-w-md text-center mb-10 mt-6 relative z-10">
+    <header class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl text-center mb-10 mt-6 relative z-10">
         <!-- 1. EHIME UNIVERSITY MUSEUM (英字タイトル・ゴールド) -->
         <div class="flex justify-center items-center gap-3 mb-4 opacity-90">
             <span class="h-[1px] w-8 bg-gradient-to-r from-transparent to-[#b1a348]"></span>
@@ -152,8 +39,8 @@
         </p>
     </header>
 
-    <!-- Main Grid (2x4) -->
-    <main class="w-full max-w-md grid grid-cols-2 gap-5 relative z-10">
+    <!-- Main Grid (Portrait: 2x4, Landscape: 4x2) -->
+    <main class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl grid grid-cols-2 landscape:grid-cols-4 sm:grid-cols-4 gap-5 relative z-10">
         
         <!-- 1. えひめ連携企業紹介 -->
         <a href="#" class="cosmic-card p-6 flex flex-col items-center justify-center text-center group text-cyan-400">
@@ -238,17 +125,6 @@
         </div>
     </footer>
 
-    <script>
-        lucide.createIcons();
-    </script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('Service worker registered.', reg))
-                    .catch(err => console.log('Service worker registration failed: ', err));
-            });
-        }
-    </script>
+    <script src="index.js" defer></script>
 </body>
 </html>
