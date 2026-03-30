@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "museum-6f112",
     "public": "public",
     "ignore": [
       "firebase.json",
