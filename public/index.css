@@ -127,9 +127,15 @@ body {
 #portal-grid .plasma-sphere {
     aspect-ratio: 1 / 1;
     flex-shrink: 0;
-    width: min(4.5rem, 60%, 12vh);
+    width: min(3.5rem, 50%, 8dvh);
     height: auto !important;
     margin-bottom: 0.25rem;
+}
+
+@media (min-width: 640px) {
+    #portal-grid .plasma-sphere {
+        width: min(4.5rem, 60%, 12vh);
+    }
 }
 
 #portal-grid .plasma-sphere svg {
