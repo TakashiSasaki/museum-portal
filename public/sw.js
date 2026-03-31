@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v10'; // Incremented to include new index.css/index.js
+const CORE_CACHE_VERSION = 'v11'; // Incremented to force refresh of mobile nav logic
 const API_CACHE_VERSION = 'v2';
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;

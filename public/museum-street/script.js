@@ -16,31 +16,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // Menu toggle logic
     const closeMenu = () => {
         if (!navContainer || !navBackdrop) return;
-        if (!navContainer.classList.contains('-translate-x-full')) {
-            navContainer.classList.add('-translate-x-full');
-            navBackdrop.classList.add('opacity-0');
-            setTimeout(() => {
-                navBackdrop.classList.add('hidden');
-            }, 300);
-        }
+        navContainer.classList.add('-translate-x-full');
+        navBackdrop.classList.add('opacity-0');
+        navBackdrop.classList.add('pointer-events-none');
+        setTimeout(() => {
+            navBackdrop.classList.add('hidden');
+        }, 300);
     };
 
-    const toggleMenu = () => {
+    const openMenu = () => {
         if (!navContainer || !navBackdrop) return;
-        if (navContainer.classList.contains('-translate-x-full')) {
-            navContainer.classList.remove('-translate-x-full');
-            navBackdrop.classList.remove('hidden');
-            setTimeout(() => {
-                navBackdrop.classList.remove('opacity-0');
-            }, 10);
-        } else {
-            closeMenu();
-        }
+        navBackdrop.classList.remove('hidden');
+        // Force reflow
+        navBackdrop.offsetHeight;
+        navContainer.classList.remove('-translate-x-full');
+        navBackdrop.classList.remove('opacity-0');
+        navBackdrop.classList.remove('pointer-events-none');
     };
 
     if (menuToggle) {
-        menuToggle.addEventListener('click', toggleMenu);
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (navContainer.classList.contains('-translate-x-full')) {
+                openMenu();
+            } else {
+                closeMenu();
+            }
+        });
     }
+
     if (navBackdrop) {
         navBackdrop.addEventListener('click', closeMenu);
     }
@@ -67,7 +71,6 @@ document.addEventListener('DOMContentLoaded', () => {
             contentFrame.classList.add('hidden');
             mapFrame.classList.remove('hidden');
             
-            // マップがまだ読み込まれていなければ読み込む
             loadMapContent(currentPage);
         }
     };
@@ -148,22 +151,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 contentFrame.srcdoc = styledHtml;
             })
             .catch(error => {
-                console.warn('Fetch failed, likely offline. Falling back to src attribute for Service Worker.', error);
-                // オフライン時、Service Workerがキャッシュを返すように、srcに直接URLを設定する
+                console.warn('Fetch failed, likely offline.', error);
                 contentFrame.src = url;
             });
     };
 
-    // Iframeのロード完了時に、動的にパディングを強制的にゼロにする
     contentFrame.addEventListener('load', () => {
         try {
             if (contentFrame.contentDocument && contentFrame.contentDocument.body) {
                 contentFrame.contentDocument.body.style.padding = '0';
-                console.log('[DEBUG] Iframe body padding set to 0');
             }
-        } catch (e) {
-            console.warn('[DEBUG] Could not set padding for iframe content (possibly cross-origin or navigation issue)', e);
-        }
+        } catch (e) {}
     });
 
     navContainer.addEventListener('click', (e) => {
@@ -180,24 +178,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 link.classList.add('active');
 
-                // 現在のタブに応じてコンテンツを更新する
                 loadEventsContent(currentPage);
-                
                 if (currentTab === 'map') {
                     loadMapContent(currentPage);
                 } else if (mapFrame) {
-                    // 他のタブを見ている間にキャッシュだけ消去しておく
                     mapFrame.dataset.loadedPage = "";
                 }
             }
-            // モバイルの場合は選択後にメニューを閉じる
             if (window.innerWidth < 768) {
                 closeMenu();
             }
         }
     });
 
-    // 初期コンテンツの読み込み
     const initialLink = navContainer.querySelector(`[data-page="${defaultPage}"]`);
     if (initialLink) {
         initialLink.classList.add('active');
