@@ -107,9 +107,21 @@
             </a>
         </nav>
 
-        <main class="w-2/3 xl:w-3/4 flex flex-col">
-            <div class="flex-grow w-full h-full">
-                <iframe id="content-frame" class="w-full h-full border-none block bg-transparent" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+        <main class="w-2/3 xl:w-3/4 flex flex-col pr-2 py-2 gap-2">
+            <!-- Tabs UI -->
+            <div class="flex gap-2 w-full h-10 flex-shrink-0 z-20">
+                <button id="tab-events" class="flex-1 cosmic-card text-sm font-bold text-center rounded-lg transition-all duration-300 bg-slate-800/80 text-white shadow-[0_0_10px_rgba(255,255,255,0.1)] active-tab">
+                    イベント情報
+                </button>
+                <button id="tab-map" class="flex-1 cosmic-card text-sm font-medium text-center rounded-lg transition-all duration-300 bg-slate-900/40 text-slate-400 opacity-60 hover:opacity-100 inactive-tab">
+                    周辺地図
+                </button>
+            </div>
+
+            <!-- Content Area -->
+            <div class="flex-grow w-full h-full relative cosmic-card rounded-lg overflow-hidden border border-slate-700/50 bg-slate-900/50 backdrop-blur-sm z-10 min-h-0">
+                <iframe id="content-frame" class="absolute inset-0 w-full h-full border-none block bg-transparent" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+                <iframe id="map-frame" class="absolute inset-0 w-full h-full border-none hidden bg-transparent"></iframe>
             </div>
         </main>
 

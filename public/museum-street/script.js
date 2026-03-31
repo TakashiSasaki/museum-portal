@@ -1,9 +1,85 @@
 document.addEventListener('DOMContentLoaded', () => {
     const navContainer = document.getElementById('museum-nav');
     const contentFrame = document.getElementById('content-frame');
+    const mapFrame = document.getElementById('map-frame');
+    const tabEvents = document.getElementById('tab-events');
+    const tabMap = document.getElementById('tab-map');
+    
     const defaultPage = '1';
+    let currentPage = defaultPage;
+    let currentTab = 'events';
 
-    const loadContent = (page) => {
+    const updateTabs = () => {
+        if (!tabEvents || !tabMap) return;
+        
+        if (currentTab === 'events') {
+            tabEvents.classList.add('bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab');
+            tabEvents.classList.remove('bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab');
+            
+            tabMap.classList.add('bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab');
+            tabMap.classList.remove('bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab');
+
+            contentFrame.classList.remove('hidden');
+            mapFrame.classList.add('hidden');
+        } else {
+            tabMap.classList.add('bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab');
+            tabMap.classList.remove('bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab');
+
+            tabEvents.classList.add('bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab');
+            tabEvents.classList.remove('bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab');
+
+            contentFrame.classList.add('hidden');
+            mapFrame.classList.remove('hidden');
+            
+            // マップがまだ読み込まれていなければ読み込む
+            loadMapContent(currentPage);
+        }
+    };
+
+    if (tabEvents) {
+        tabEvents.addEventListener('click', () => {
+            if (currentTab !== 'events') {
+                currentTab = 'events';
+                updateTabs();
+            }
+        });
+    }
+
+    if (tabMap) {
+        tabMap.addEventListener('click', () => {
+            if (currentTab !== 'map') {
+                currentTab = 'map';
+                updateTabs();
+            }
+        });
+    }
+
+    const loadMapContent = (page) => {
+        if (!mapFrame || mapFrame.dataset.loadedPage === String(page)) {
+            return; 
+        }
+        
+        const url = `mymap/${String(page).padStart(2, '0')}-mymap.html`;
+        fetch(url)
+            .then(res => {
+                if (!res.ok) throw new Error("Map HTML fetch failed");
+                return res.text();
+            })
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const embeddedIframe = doc.querySelector('iframe');
+                if (embeddedIframe && embeddedIframe.src) {
+                    mapFrame.src = embeddedIframe.src;
+                    mapFrame.dataset.loadedPage = String(page);
+                }
+            })
+            .catch(err => {
+                console.warn("Could not load map content", err);
+            });
+    };
+
+    const loadEventsContent = (page) => {
         const url = `events/${String(page).padStart(2, '0')}-events.html`;
 
         fetch(url)
@@ -59,13 +135,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (link) {
             e.preventDefault();
             const page = link.dataset.page;
+            
+            if (currentPage !== page) {
+                currentPage = page;
+                
+                document.querySelectorAll('.museum-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                link.classList.add('active');
 
-            document.querySelectorAll('.museum-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            link.classList.add('active');
-
-            loadContent(page);
+                // 現在のタブに応じてコンテンツを更新する
+                loadEventsContent(currentPage);
+                
+                if (currentTab === 'map') {
+                    loadMapContent(currentPage);
+                } else if (mapFrame) {
+                    // 他のタブを見ている間にキャッシュだけ消去しておく
+                    mapFrame.dataset.loadedPage = "";
+                }
+            }
         }
     });
 
@@ -73,7 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const initialLink = navContainer.querySelector(`[data-page="${defaultPage}"]`);
     if (initialLink) {
         initialLink.classList.add('active');
-        loadContent(defaultPage);
+        loadEventsContent(defaultPage);
+        if (currentTab === 'map') {
+            loadMapContent(defaultPage);
+        }
     }
     
     if (typeof lucide !== 'undefined') {
