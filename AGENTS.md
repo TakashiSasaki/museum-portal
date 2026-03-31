@@ -9,3 +9,4 @@
 - デプロイには `FIREBASE_TOKEN` シークレットが必要です。
 - ローカルからの手動デプロイには `bun x firebase deploy` を使用してください。
 - カノニカルドメインは `https://museum-portal.moukaeritai.work` です。
+- Firebaseのデプロイ時の認証は、当面の間はサービスアカウントキーへの移行は行わず、トークンベースの認証(`FIREBASE_TOKEN`)を継続して使用します。
