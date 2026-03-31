@@ -4,8 +4,8 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v9'; // Incremented to include new index.css/index.js
-const API_CACHE_VERSION = 'v2'; 
+const CORE_CACHE_VERSION = 'v10'; // Incremented to include new index.css/index.js
+const API_CACHE_VERSION = 'v2';
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
 const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
@@ -53,10 +53,11 @@ self.addEventListener('install', (evt) => {
       const cachePromises = CORE_ASSETS_TO_CACHE.map((assetUrl) => {
         return (async () => {
           try {
-            const request = assetUrl.startsWith('http') 
-              ? new Request(assetUrl, { mode: 'no-cors' }) 
+            const request = assetUrl.startsWith('http')
+              ? new Request(assetUrl, { mode: 'no-cors' })
               : new Request(assetUrl);
-            const response = await fetch(request);
+            // Use { cache: 'reload' } to ensure we get fresh content from the server
+            const response = await fetch(request, { cache: 'reload' });
             if (response.status === 200 || response.type === 'opaque') {
               await cache.put(assetUrl, response);
             } else {
@@ -141,7 +142,7 @@ async function handleApiRequest(request) {
 
   try {
     const networkResponse = await fetch(request);
-    
+
     if (networkResponse && networkResponse.status === 200) {
       await cache.put(request, networkResponse.clone());
     }
@@ -165,7 +166,7 @@ async function handleNavigationRequest(request) {
 
     const cache = await caches.open(CORE_CACHE_NAME);
     await cache.put(request, networkResponse.clone());
-    
+
     return networkResponse;
   } catch (error) {
     console.log(`[ServiceWorker] Network failed for navigation. Trying cache for: ${request.url}`);
@@ -178,25 +179,34 @@ async function handleNavigationRequest(request) {
 }
 
 /**
- * Handles static asset requests with a "Cache First" strategy.
+ * Handles static asset requests with a "Network First" strategy.
+ * Always tries to fetch from the network and updates the cache if successful.
+ * Falls back to cache if the network fails.
  */
 async function handleStaticAssetRequest(request) {
-    const cachedResponse = await caches.match(request, {ignoreSearch: true});
-    if (cachedResponse) {
-        return cachedResponse;
+  try {
+    // 1. Try to fetch from the network (bypass browser cache to be sure)
+    const networkResponse = await fetch(request);
+
+    if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+      // 2. Success! Update the cache with the fresh content
+      const cache = await caches.open(CORE_CACHE_NAME);
+      await cache.put(request, networkResponse.clone());
+      return networkResponse;
     }
     
-    try {
-        const networkResponse = await fetch(request);
-        if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
-            const cache = await caches.open(CORE_CACHE_NAME);
-            await cache.put(request, networkResponse.clone());
-        }
-        return networkResponse;
-    } catch(e) {
-        console.error(`[SW] Failed to fetch static asset: ${request.url}`, e);
-        return new Response(`Failed to fetch ${request.url}`, { status: 500 });
+    // Fallback to cache if network response is not OK (e.g. 404, 500)
+    const cachedResponse = await caches.match(request, { ignoreSearch: true });
+    return cachedResponse || networkResponse;
+  } catch (e) {
+    // 3. Network failure (offline) - Fallback to cache
+    console.log(`[SW] Network failed for ${request.url}. Falling back to cache.`);
+    const cachedResponse = await caches.match(request, { ignoreSearch: true });
+    if (cachedResponse) {
+      return cachedResponse;
     }
+    return new Response(`Offline: Failed to fetch ${request.url}`, { status: 503 });
+  }
 }
 
 // 4. Utility Functions
@@ -208,7 +218,7 @@ async function handleStaticAssetRequest(request) {
 async function precacheApiContent() {
   console.log('[ServiceWorker] Starting background API pre-caching for pages 1-10.');
   const cache = await caches.open(API_CACHE_NAME);
-  
+
   for (let i = 1; i <= 10; i++) {
     const url = `${API_URL}?page=${i}&mime=text/plain`;
     const request = new Request(url);
@@ -217,12 +227,12 @@ async function precacheApiContent() {
     if (!cachedResponse) {
       console.log(`[ServiceWorker] Pre-caching API content for page ${i}`);
       try {
-          const networkResponse = await fetch(request);
-          if (networkResponse && networkResponse.status === 200) {
-             await cache.put(request, networkResponse);
-          }
-      } catch(e) {
-          console.warn(`[ServiceWorker] Failed to pre-cache API content for page ${i}`, e);
+        const networkResponse = await fetch(request);
+        if (networkResponse && networkResponse.status === 200) {
+          await cache.put(request, networkResponse);
+        }
+      } catch (e) {
+        console.warn(`[ServiceWorker] Failed to pre-cache API content for page ${i}`, e);
       }
     }
   }
