@@ -127,14 +127,14 @@ body {
 #portal-grid .plasma-sphere {
     aspect-ratio: 1 / 1;
     flex-shrink: 0;
-    width: min(3.5rem, 45%, 10vh);
+    width: min(4.5rem, 60%, 12vh);
     height: auto !important;
     margin-bottom: 0.25rem;
 }
 
 #portal-grid .plasma-sphere svg {
-    width: 50%;
-    height: 50%;
+    width: 60%;
+    height: 60%;
 }
 
 /* --- ポートレイト表示 --- */
