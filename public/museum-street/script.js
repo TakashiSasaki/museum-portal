@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             color: #e2e8f0; 
                             background-color: transparent;
                             font-family: 'Noto Sans JP', sans-serif;
-                            padding: 1.25rem; 
+                            padding: 0; 
                             line-height: 1.8;
                         }
                         a { color: #60a5fa; text-decoration: underline; }
@@ -41,6 +41,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 contentFrame.src = url;
             });
     };
+
+    // Iframeのロード完了時に、動的にパディングを強制的にゼロにする
+    contentFrame.addEventListener('load', () => {
+        try {
+            if (contentFrame.contentDocument && contentFrame.contentDocument.body) {
+                contentFrame.contentDocument.body.style.padding = '0';
+                console.log('[DEBUG] Iframe body padding set to 0');
+            }
+        } catch (e) {
+            console.warn('[DEBUG] Could not set padding for iframe content (possibly cross-origin or navigation issue)', e);
+        }
+    });
 
     navContainer.addEventListener('click', (e) => {
         const link = e.target.closest('.museum-item');

@@ -36,7 +36,7 @@
                                 color: #e2e8f0; 
                                 background-color: transparent;
                                 font-family: 'Noto Sans JP', sans-serif;
-                                padding: 1rem;
+                                padding: 0;
                             } 
                             a { color: #60a5fa; }
                             h1, h2, h3, h4, h5, h6 { border-color: rgba(255,255,255,0.2); }
@@ -52,6 +52,17 @@
         };
 
         loadContent();
+
+        // Iframeのロード完了時にパディングをゼロにする
+        iframe.addEventListener('load', () => {
+            try {
+                if (iframe.contentDocument && iframe.contentDocument.body) {
+                    iframe.contentDocument.body.style.padding = '0';
+                }
+            } catch (e) {
+                console.warn('[DEBUG] Could not set padding for internal iframe', e);
+            }
+        });
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
