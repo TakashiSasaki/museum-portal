@@ -5,9 +5,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabEvents = document.getElementById('tab-events');
     const tabMap = document.getElementById('tab-map');
     
+    // Mobile navigation elements
+    const navBackdrop = document.getElementById('nav-backdrop');
+    const menuToggle = document.getElementById('menu-toggle');
+    
     const defaultPage = '1';
     let currentPage = defaultPage;
     let currentTab = 'events';
+
+    // Menu toggle logic
+    const closeMenu = () => {
+        if (!navContainer || !navBackdrop) return;
+        if (!navContainer.classList.contains('-translate-x-full')) {
+            navContainer.classList.add('-translate-x-full');
+            navBackdrop.classList.add('opacity-0');
+            setTimeout(() => {
+                navBackdrop.classList.add('hidden');
+            }, 300);
+        }
+    };
+
+    const toggleMenu = () => {
+        if (!navContainer || !navBackdrop) return;
+        if (navContainer.classList.contains('-translate-x-full')) {
+            navContainer.classList.remove('-translate-x-full');
+            navBackdrop.classList.remove('hidden');
+            setTimeout(() => {
+                navBackdrop.classList.remove('opacity-0');
+            }, 10);
+        } else {
+            closeMenu();
+        }
+    };
+
+    if (menuToggle) {
+        menuToggle.addEventListener('click', toggleMenu);
+    }
+    if (navBackdrop) {
+        navBackdrop.addEventListener('click', closeMenu);
+    }
 
     const updateTabs = () => {
         if (!tabEvents || !tabMap) return;
@@ -153,6 +189,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     // 他のタブを見ている間にキャッシュだけ消去しておく
                     mapFrame.dataset.loadedPage = "";
                 }
+            }
+            // モバイルの場合は選択後にメニューを閉じる
+            if (window.innerWidth < 768) {
+                closeMenu();
             }
         }
     });
