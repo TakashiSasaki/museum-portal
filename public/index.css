@@ -110,3 +110,60 @@ body {
 .icon-glow {
     filter: drop-shadow(0 0 6px white) drop-shadow(0 0 12px currentColor);
 }
+
+/* --- ポートレイト表示でビューポート内に全カードを収める --- */
+@media (orientation: portrait) {
+    #portal-grid {
+        grid-template-rows: repeat(4, 1fr);
+    }
+
+    #portal-grid .cosmic-card {
+        padding: 0.5rem;
+    }
+
+    #portal-grid .plasma-sphere {
+        width: 3rem;
+        height: 3rem;
+        margin-bottom: 0.25rem;
+    }
+
+    #portal-grid .plasma-sphere svg {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+}
+
+/* --- ランドスケープ表示でもビューポート内に収める --- */
+@media (orientation: landscape) {
+    #portal-grid {
+        grid-template-rows: repeat(2, 1fr);
+    }
+
+    #portal-grid .cosmic-card {
+        padding: 0.5rem;
+    }
+
+    #portal-grid .plasma-sphere {
+        width: 3rem;
+        height: 3rem;
+        margin-bottom: 0.25rem;
+    }
+
+    #portal-grid .plasma-sphere svg {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+
+    /* ランドスケープではヘッダー内のスローガンを非表示にしてスペース削減 */
+    header p {
+        display: none;
+    }
+
+    header h1 {
+        font-size: 1.25rem;
+    }
+
+    header .mb-4 {
+        margin-bottom: 0.25rem;
+    }
+}

@@ -12,13 +12,13 @@
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="index.css">
 </head>
-<body class="min-h-screen flex flex-col items-center relative">
+<body class="h-screen flex flex-col items-center relative overflow-hidden">
 
     <div class="nebula-layer"></div>
     <div class="star-dust"></div>
 
     <!-- Header Area: 位置関係を元の状態 (1_English 2_Japanese 3_Slogan) へ復元 -->
-    <header class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl text-center mb-10 mt-6 relative z-10">
+    <header class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl text-center mb-3 mt-2 landscape:mb-2 landscape:mt-1 relative z-10 flex-shrink-0">
         <!-- 1. EHIME UNIVERSITY MUSEUM (英字タイトル・ゴールド) -->
         <div class="flex justify-center items-center gap-3 mb-4 opacity-90">
             <span class="h-[1px] w-8 bg-gradient-to-r from-transparent to-[#b1a348]"></span>
@@ -40,7 +40,7 @@
     </header>
 
     <!-- Main Grid (Portrait: 2x4, Landscape: 4x2) -->
-    <main class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl grid grid-cols-2 landscape:grid-cols-4 sm:grid-cols-4 gap-5 relative z-10">
+    <main class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl grid grid-cols-2 landscape:grid-cols-4 sm:grid-cols-4 gap-3 relative z-10 flex-1 min-h-0 px-4" id="portal-grid">
         
         <!-- 1. えひめ連携企業紹介 -->
         <a href="#" class="cosmic-card p-6 flex flex-col items-center justify-center text-center group text-cyan-400">
@@ -119,7 +119,7 @@
     </main>
 
     <!-- Footer Area -->
-    <footer class="mt-16 mb-8 text-center relative z-10">
+    <footer class="mt-2 mb-2 text-center relative z-10 flex-shrink-0">
         <div class="inline-block px-5 py-2 rounded-full bg-slate-900/50 border border-slate-700/50 backdrop-blur-md">
             <p class="text-[9px] tracking-[0.4em] font-light text-slate-400 uppercase">Knowledge Portal // Ehime Univ. Museum</p>
         </div>
