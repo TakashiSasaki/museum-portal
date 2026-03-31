@@ -111,47 +111,43 @@ body {
     filter: drop-shadow(0 0 6px white) drop-shadow(0 0 12px currentColor);
 }
 
-/* --- ポートレイト表示でビューポート内に全カードを収める --- */
+/* --- 共通: ポータルグリッドのレスポンシブ設定 --- */
+#portal-grid {
+    align-items: stretch;
+    justify-items: stretch;
+}
+
+#portal-grid .cosmic-card {
+    box-sizing: border-box;
+    padding: 0.5rem;
+    overflow: hidden;
+}
+
+/* plasma-sphere は常に真円を維持 — flex圧縮を防止 */
+#portal-grid .plasma-sphere {
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+    width: min(3.5rem, 45%, 10vh);
+    height: auto !important;
+    margin-bottom: 0.25rem;
+}
+
+#portal-grid .plasma-sphere svg {
+    width: 50%;
+    height: 50%;
+}
+
+/* --- ポートレイト表示 --- */
 @media (orientation: portrait) {
     #portal-grid {
         grid-template-rows: repeat(4, 1fr);
     }
-
-    #portal-grid .cosmic-card {
-        padding: 0.5rem;
-    }
-
-    #portal-grid .plasma-sphere {
-        width: 3rem;
-        height: 3rem;
-        margin-bottom: 0.25rem;
-    }
-
-    #portal-grid .plasma-sphere svg {
-        width: 1.5rem;
-        height: 1.5rem;
-    }
 }
 
-/* --- ランドスケープ表示でもビューポート内に収める --- */
+/* --- ランドスケープ表示 --- */
 @media (orientation: landscape) {
     #portal-grid {
         grid-template-rows: repeat(2, 1fr);
-    }
-
-    #portal-grid .cosmic-card {
-        padding: 0.5rem;
-    }
-
-    #portal-grid .plasma-sphere {
-        width: 3rem;
-        height: 3rem;
-        margin-bottom: 0.25rem;
-    }
-
-    #portal-grid .plasma-sphere svg {
-        width: 1.5rem;
-        height: 1.5rem;
     }
 
     /* ランドスケープではヘッダー内のスローガンを非表示にしてスペース削減 */
