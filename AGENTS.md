@@ -18,6 +18,7 @@
 1.  **Viewport-First (スクロールレス)**:
     - ユーザーが縦方向のスクロールをすることなく、全コンテンツ（ヘッダー、全カード、フッター）を一度に視認できるレイアウトを維持します。
     - `body` には **`p-0 m-0 h-screen overflow-hidden`**（またはモバイルブラウザバーを考慮した `h-[100dvh]`）を設定し、コンテンツがビューポートの全域を有効活用できるようにしてください。
+    - レイアウトの設計では、モダンなCSS Viewport単位である `svh`（small viewport height）、`lvh`（large viewport height）、および `dvh`（dynamic viewport height）を活用し、特にスマートフォン等におけるブラウザのツールバーやセーフエリアを考慮した **`dvh` および `env(safe-area-inset-*)` を前提に設計**する必要があります。
     - コンテンツは `flex-1` や `grid-template-rows: repeat(n, 1fr)` を使用してビューポート内に均等に収めてください。
     - **Frontend Verification Requirement**: フロントエンドのレイアウトを変更する際は、必ず横幅の狭いモバイル端末（例：iPhone 12 mini、375x812）での表示確認（Playwright等のスクリプト）を実施し、右端がはみ出さないこと、および下側が切れない（スクロールが発生しない）ことを検証してください。
 
