@@ -81,16 +81,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Replace existing text-* class on main <a> element (excluding generic ones like text-center)
                     const textClasses = Array.from(existingLink.classList).filter(c => c.startsWith('text-') && !['text-center', 'text-left', 'text-right', 'text-justify'].includes(c));
-                    existingLink.classList.remove(...textClasses);
+                    existingLink.classList.remove(...textClasses, 'default-text-color');
                     existingLink.classList.add(theme.text);
 
                     // Update the gradient on the .plasma-sphere
                     if (iconContainer) {
-                        // Remove existing gradients
-                        const gradClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('from-') || c.startsWith('to-'));
+                        // Remove existing gradients and backgrounds
+                        const gradClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('bg-') || c.startsWith('from-') || c.startsWith('to-'));
                         iconContainer.classList.remove(...gradClasses);
 
                         // Add new gradients
+                        iconContainer.classList.add('bg-gradient-to-br');
                         theme.grad.split(' ').forEach(cls => iconContainer.classList.add(cls));
                     }
                 }
