@@ -22,3 +22,34 @@ if ("serviceWorker" in navigator) {
       .catch((err) => console.log("Service worker registration failed: ", err));
   });
 }
+
+// Long Press for Admin Access
+const footerTrigger = document.getElementById('footer-trigger');
+if (footerTrigger) {
+  let longPressTimer;
+  const pressDuration = 2000; // 2 seconds
+
+  const startPress = () => {
+    longPressTimer = setTimeout(() => {
+      window.location.href = '/admin/';
+    }, pressDuration);
+  };
+
+  const cancelPress = () => {
+    clearTimeout(longPressTimer);
+  };
+
+  // Mouse events
+  footerTrigger.addEventListener('mousedown', startPress);
+  footerTrigger.addEventListener('mouseup', cancelPress);
+  footerTrigger.addEventListener('mouseleave', cancelPress);
+
+  // Touch events
+  footerTrigger.addEventListener('touchstart', (e) => {
+    // Prevent default context menu on mobiles
+    // e.preventDefault(); 
+    startPress();
+  });
+  footerTrigger.addEventListener('touchend', cancelPress);
+  footerTrigger.addEventListener('touchcancel', cancelPress);
+}
