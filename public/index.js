@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Add 'text-white icon-glow' to the svg if not present to match styling
                     const svgElement = iconContainer.querySelector('svg');
                     if (svgElement) {
-                        svgElement.classList.add('icon-glow');
+                        svgElement.classList.add('text-white', 'icon-glow');
                     }
                 }
 
@@ -79,10 +79,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (cardData.colorTheme && themeMap[cardData.colorTheme]) {
                     const theme = themeMap[cardData.colorTheme];
 
-                    // Replace existing text-* class on main <a> element (excluding generic ones like text-center)
-                    const textClasses = Array.from(existingLink.classList).filter(c => c.startsWith('text-') && !['text-center', 'text-left', 'text-right', 'text-justify'].includes(c));
-                    existingLink.classList.remove(...textClasses, 'default-text-color');
-                    existingLink.classList.add(theme.text);
+                    // Remove default-text-color to show data is loaded
+                    existingLink.classList.remove('default-text-color');
+
+                    // Apply theme text color to the plasma sphere to ensure currentColor glow works properly
+                    if (iconContainer) {
+                        const iconTextClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('text-') && !['text-center'].includes(c));
+                        iconContainer.classList.remove(...iconTextClasses);
+                        iconContainer.classList.add(theme.text);
+                    }
+
+                    // Ensure title text remains white/slate-200
+                    const spanElement = existingLink.querySelector('span');
+                    if (spanElement) {
+                        spanElement.classList.remove('text-slate-500'); // If there were any fallback
+                        spanElement.classList.add('text-slate-200'); // Explicitly set to light color
+                    }
 
                     // Update the gradient on the .plasma-sphere
                     if (iconContainer) {
