@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Add 'text-white icon-glow' to the svg if not present to match styling
                     const svgElement = iconContainer.querySelector('svg');
                     if (svgElement) {
-                        svgElement.classList.add('text-white', 'icon-glow');
+                        svgElement.classList.add('icon-glow');
                     }
                 }
 
