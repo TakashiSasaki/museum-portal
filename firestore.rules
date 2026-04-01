@@ -8,5 +8,8 @@ service cloud.firestore {
       // しばらくの間は、誰でも書き込み可能にする
       allow write: if true;
     }
+    match /portalCards/{document=**} {
+      allow read, write: if true;
+    }
   }
 }
