@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeMenu = () => {
         if (!navContainer || !navBackdrop) return;
         navContainer.classList.add('-translate-x-full');
+        navContainer.classList.remove('translate-x-0');
         navBackdrop.classList.add('opacity-0');
         navBackdrop.classList.add('pointer-events-none');
         setTimeout(() => {
@@ -30,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Force reflow
         navBackdrop.offsetHeight;
         navContainer.classList.remove('-translate-x-full');
+        navContainer.classList.add('translate-x-0');
         navBackdrop.classList.remove('opacity-0');
         navBackdrop.classList.remove('pointer-events-none');
     };
