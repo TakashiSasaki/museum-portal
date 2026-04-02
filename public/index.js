@@ -169,3 +169,125 @@ if (footerTrigger) {
   footerTrigger.addEventListener('touchend', cancelPress);
   footerTrigger.addEventListener('touchcancel', cancelPress);
 }
+
+
+// --- iOS PWA Install Prompt Logic ---
+function initIosPwaPrompt() {
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  }
+
+  function isStandaloneMode() {
+    return ('standalone' in window.navigator && window.navigator.standalone) ||
+      window.matchMedia('(display-mode: standalone)').matches;
+  }
+
+  function trackIosInstallPromptEvent(eventName, payload = {}) {
+    // Placeholder for future gtag integration
+    // console.log(`[Analytics Placeholder] Event: ${eventName}`, payload);
+    if (typeof gtag === 'function') {
+      gtag('event', eventName, payload);
+    }
+  }
+
+  function updateVisitCount() {
+    // Increment only once per session
+    if (!sessionStorage.getItem('iosPwaSessionVisited')) {
+      const rawCount = localStorage.getItem('iosInstallPromptVisitCount');
+      const count = rawCount ? Number(rawCount) : 0;
+      const nextCount = count + 1;
+      localStorage.setItem('iosInstallPromptVisitCount', String(nextCount));
+      sessionStorage.setItem('iosPwaSessionVisited', 'true');
+      return nextCount;
+    }
+    return Number(localStorage.getItem('iosInstallPromptVisitCount') || 1);
+  }
+
+  function shouldShowPrompt() {
+    if (!isIOS()) return false;
+    if (isStandaloneMode()) {
+      trackIosInstallPromptEvent('ios_install_prompt_standalone_detected');
+      return false;
+    }
+
+    const dontShowUntil = Number(localStorage.getItem('iosInstallPromptDontShowUntil') || 0);
+    if (Date.now() < dontShowUntil) return false;
+
+    const visitCount = updateVisitCount();
+    if (visitCount < 2) return false;
+
+    return true;
+  }
+
+  if (shouldShowPrompt()) {
+    // Delay prompt by 3 seconds
+    setTimeout(() => {
+      // Double check standalone mode just in case
+      if (isStandaloneMode()) return;
+
+      const promptHtml = `
+        <div id="ios-pwa-prompt" class="ios-pwa-prompt" role="dialog" aria-label="ホーム画面追加案内">
+            <div class="ios-pwa-prompt-header">
+                <h2 class="ios-pwa-prompt-title">ホーム画面に追加してすばやく開く</h2>
+                <button id="ios-pwa-prompt-close" class="ios-pwa-prompt-close" aria-label="閉じる">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="ios-pwa-prompt-body">
+                Safari の共有メニュー
+                <span class="ios-pwa-prompt-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
+                </span>
+                から「ホーム画面に追加」を選択してください。
+            </p>
+            <div class="ios-pwa-prompt-footer">
+                <input type="checkbox" id="ios-pwa-prompt-checkbox" class="ios-pwa-prompt-checkbox">
+                <label for="ios-pwa-prompt-checkbox">このお知らせを1ヶ月間表示しない</label>
+            </div>
+        </div>
+      `;
+
+      document.body.insertAdjacentHTML('beforeend', promptHtml);
+      const promptEl = document.getElementById('ios-pwa-prompt');
+
+      // Trigger slide up
+      // requestAnimationFrame is used to ensure the element is in the DOM before applying the class
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          promptEl.classList.add('show');
+        });
+      });
+
+      trackIosInstallPromptEvent('ios_install_prompt_impression', {
+        page_path: window.location.pathname,
+        visit_count: Number(localStorage.getItem('iosInstallPromptVisitCount') || 1)
+      });
+
+      document.getElementById('ios-pwa-prompt-close').addEventListener('click', () => {
+        promptEl.classList.remove('show');
+
+        const isChecked = document.getElementById('ios-pwa-prompt-checkbox').checked;
+        const cooldownDays = isChecked ? 30 : 3;
+        const cooldownMs = cooldownDays * 24 * 60 * 60 * 1000;
+        localStorage.setItem('iosInstallPromptDontShowUntil', String(Date.now() + cooldownMs));
+
+        trackIosInstallPromptEvent('ios_install_prompt_close', {
+          dont_show_checked: isChecked,
+          cooldown_days: cooldownDays
+        });
+
+        // Wait for transition before removing
+        setTimeout(() => {
+          promptEl.remove();
+        }, 500);
+      });
+
+    }, 3000);
+  } else {
+    // Even if not showing, we should update visit count in background
+    updateVisitCount();
+  }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', initIosPwaPrompt);
