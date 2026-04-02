@@ -79,7 +79,7 @@ const categories = [
     {
         id: 8,
         name: "自治体",
-        description: "愛媛大学と連携協定を締結している、教育・産業振興を支える自治体",
+        description: "愛媛大学研究協力会に入っていただいている、教育・産業振興を支える自治体",
         companies: [
             "今治市", "西条市"
         ]
