@@ -132,11 +132,15 @@ function renderApp() {
 
                 <div class="flex-1 grid grid-cols-3 md:grid-cols-5 gap-1 sm:gap-3 overflow-y-auto no-scrollbar pb-4" id="company-grid">
                     ${category.companies.map(company => `
-                        <div class="cosmic-card p-1 sm:p-2 flex flex-col items-center justify-center text-center group">
-                            <div class="w-full aspect-[16/10] mb-1 sm:mb-2 flex items-center justify-center p-0.5 sm:p-1">
-                                ${createDummyLogo(company)}
+                        <div class="cosmic-card p-1 sm:p-2 flex flex-col items-center justify-center text-center group min-h-0">
+                            <!-- Logo container: allowed to shrink -->
+                            <div class="w-full flex-shrink min-h-0 flex items-center justify-center p-0.5 sm:p-1 mb-1 sm:mb-2">
+                                <div class="w-full aspect-[16/10]">
+                                    ${createDummyLogo(company)}
+                                </div>
                             </div>
-                            <span class="text-[8px] sm:text-[11px] font-medium text-slate-200 leading-tight tracking-wide group-hover:text-cyan-300 transition-colors" style="word-break: break-all;">
+                            <!-- Company Name: prioritize displaying full text -->
+                            <span class="flex-shrink-0 text-[8px] sm:text-[11px] font-medium text-slate-200 leading-tight tracking-wide group-hover:text-cyan-300 transition-colors break-words overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
                                 ${company}
                             </span>
                         </div>
