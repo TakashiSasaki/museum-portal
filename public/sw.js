@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v11'; // Incremented to force refresh of mobile nav logic
+const CORE_CACHE_VERSION = 'v12'; // Updated for renkei directory and municipal tab
 const API_CACHE_VERSION = 'v2';
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -39,7 +39,11 @@ const CORE_ASSETS_TO_CACHE = [
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap',
   'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&display=swap',
-  'https://unpkg.com/lucide@latest'
+  'https://unpkg.com/lucide@latest',
+  '/renkei/',
+  '/renkei/index.html',
+  '/renkei/index.css',
+  '/renkei/index.js'
 ];
 
 // 2. Event Listeners
