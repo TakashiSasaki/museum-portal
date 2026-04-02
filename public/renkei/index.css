@@ -4,6 +4,7 @@
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     opacity: 0.7;
+    z-index: 50;
 }
 
 .back-button:hover {
@@ -13,11 +14,40 @@
     filter: drop-shadow(0 0 8px rgba(103, 232, 249, 0.5));
 }
 
+/* タブナビゲーションのスクロールバー隠し */
+#tab-navigation {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+#tab-navigation::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+}
+
+/* タブボタンのスタイル */
+.tab-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    cursor: pointer;
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f1f5f9;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #024252 0%, #050510 100%);
+    border-color: #67e8f9;
+    color: #67e8f9;
+    box-shadow: 0 0 15px rgba(103, 232, 249, 0.3);
+}
+
 /* カードのアニメーション：フェードイン */
 @keyframes fadeInUp {
     from {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(10px);
     }
     to {
         opacity: 1;
@@ -25,27 +55,51 @@
     }
 }
 
-.cosmic-card {
-    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+#company-grid .cosmic-card {
+    animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    background: rgba(15, 20, 35, 0.6);
 }
 
-/* モバイル最適化：ランドスケープ時の余白調整 */
-@media (orientation: landscape) and (max-height: 500px) {
+/* ビューポートに合わせてグリッドの高さを調整 */
+#tab-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#company-grid {
+    align-content: start;
+}
+
+/* 縦方向のスペースが厳しい場合の調整 */
+@media (max-height: 600px) {
     header {
-        margin-top: 1rem !important;
-        margin-bottom: 1rem !important;
-    }
-    .plasma-sphere {
-        width: 4rem !important;
-        margin-bottom: 1rem !important;
-    }
-    h2 {
-        font-size: 1.125rem !important;
+        margin-top: 0.5rem !important;
         margin-bottom: 0.5rem !important;
     }
-    p {
-        font-size: 0.75rem !important;
-        margin-bottom: 1rem !important;
+    .back-button {
+        top: -0.25rem !important;
+    }
+    #tab-content h2 {
+        font-size: 0.875rem !important;
+    }
+    #tab-content p {
+        display: none; /* スローガンを消してスペースを稼ぐ */
+    }
+    .cosmic-card {
+        padding: 0.25rem !important;
+    }
+    .cosmic-card .w-full {
+        display: none; /* 短い画面ではロゴを隠して文字のみにする */
+    }
+}
+
+/* ランドスケープ最適化 */
+@media (orientation: landscape) and (max-height: 500px) {
+    #tab-navigation {
+        padding-top: 0 !important;
+        padding-bottom: 0.25rem !important;
+        margin-bottom: 0.5rem !important;
     }
     footer {
         display: none;

@@ -17,57 +17,51 @@
     <!-- SEO & Icons -->
     <link rel="canonical" href="https://museum-portal.moukaeritai.work/renkei/" />
 </head>
-<body class="p-0 m-0 h-[100dvh] flex flex-col items-center relative overflow-hidden">
+<body class="p-0 m-0 h-[100dvh] flex flex-col items-center relative overflow-hidden bg-black text-slate-200">
 
     <!-- Background layers -->
     <div class="nebula-layer"></div>
     <div class="star-dust"></div>
 
-    <header class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl px-4 text-center mb-4 sm:mb-6 mt-4 landscape:mt-2 relative z-10 flex-shrink-0">
+    <!-- Header Section -->
+    <header class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-5xl px-4 text-center mt-4 sm:mt-6 mb-2 relative z-10 flex-shrink-0">
         <!-- Back Navigation -->
         <a href="/" class="back-button absolute left-2 sm:left-4 top-0 text-slate-400 flex items-center gap-1 text-xs sm:text-sm">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
             <span>Portal</span>
         </a>
 
-        <!-- Header content matching index.html -->
-        <div class="flex justify-center items-center gap-1 sm:gap-3 mb-1 sm:mb-4 opacity-90">
+        <!-- EHIME UNIVERSITY MUSEUM -->
+        <div class="flex justify-center items-center gap-1 sm:gap-3 mb-1 sm:mb-2 opacity-90">
             <span class="h-[1px] w-6 sm:w-8 bg-gradient-to-r from-transparent to-[#b1a348]"></span>
-            <span class="text-[10px] sm:text-[12px] font-bold text-[#b1a348] tracking-[0.2em] sm:tracking-[0.4em] uppercase drop-shadow-[0_0_8px_rgba(177,163,72,0.4)]">
+            <span class="text-[9px] sm:text-[11px] font-bold text-[#b1a348] tracking-[0.2em] sm:tracking-[0.4em] uppercase drop-shadow-[0_0_8px_rgba(177,163,72,0.4)]">
                 Ehime University Museum
             </span>
             <span class="h-[1px] w-6 sm:w-8 bg-gradient-to-l from-transparent to-[#b1a348]"></span>
         </div>
 
-        <h1 class="text-lg sm:text-3xl font-bold tracking-normal sm:tracking-[0.2em] whitespace-nowrap text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
+        <h1 class="text-lg sm:text-2xl font-bold tracking-normal sm:tracking-[0.1em] whitespace-nowrap text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
             えひめ連携企業紹介
         </h1>
     </header>
 
-    <main class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl px-6 relative z-10 flex-1 flex flex-col justify-center min-h-0">
-        <div class="cosmic-card p-6 sm:p-12 flex flex-col items-center text-center">
-            <div class="plasma-sphere bg-cyan-500/20 mb-6 w-16 h-16 sm:w-24 sm:h-24 flex items-center justify-center border-cyan-400/50" style="aspect-ratio: 1/1;">
-                <i data-lucide="building-2" class="w-8 h-8 sm:w-12 sm:h-12 text-cyan-300 icon-glow"></i>
-            </div>
-            
-            <h2 class="text-lg sm:text-2xl font-medium text-cyan-100 mb-4 tracking-tight">地元の知と、企業の力を結ぶ。</h2>
-            
-            <p class="text-[13px] sm:text-base text-slate-300 leading-relaxed mb-8 max-w-[280px] sm:max-w-md">
-                愛媛大学ミュージアムは、地域の企業と連携し、<br class="hidden sm:block">
-                新しい価値の創造と知の還元を目指しています。<br>
-                連携企業の詳細については、現在準備中です。
-            </p>
+    <!-- Main Content -->
+    <main class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-5xl px-4 sm:px-6 relative z-10 flex-1 flex flex-col min-h-0">
+        <!-- Sticky Navigation Area -->
+        <nav id="tab-navigation" class="flex overflow-x-auto gap-2 py-2 mb-2 sm:mb-4 no-scrollbar">
+            <!-- Tabs injected by JS -->
+        </nav>
 
-            <a href="/" class="px-8 py-3 rounded-full bg-white/5 border border-white/10 text-white text-xs sm:text-sm tracking-widest hover:bg-white/10 transition-all backdrop-blur-sm">
-                ポータルへ戻る
-            </a>
-        </div>
+        <!-- Dynamic Content Area -->
+        <section id="tab-content" class="flex-1 min-h-0 overflow-hidden mb-2 sm:mb-4">
+            <!-- Content injected by JS -->
+        </section>
     </main>
 
     <!-- Footer Area matching index.html -->
-    <footer class="mt-auto mb-4 sm:mb-6 text-center relative z-10 flex-shrink-0 select-none">
-        <div class="inline-block py-1 sm:py-2 px-4 rounded-full bg-slate-900/50 border border-slate-700/50 backdrop-blur-md">
-            <p class="text-[9px] tracking-[0.4em] font-light text-slate-500 uppercase">Knowledge Portal // Ehime Univ. Museum</p>
+    <footer class="mt-auto mb-2 sm:mb-4 text-center relative z-10 flex-shrink-0 select-none">
+        <div class="inline-block py-1 px-4 rounded-full bg-slate-900/50 border border-slate-700/50 backdrop-blur-md">
+            <p class="text-[8px] sm:text-[9px] tracking-[0.3em] font-light text-slate-500 uppercase">Knowledge Portal // Ehime Univ. Museum // Collaboration</p>
         </div>
     </footer>
 
