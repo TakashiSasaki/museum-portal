@@ -6,7 +6,7 @@
 const categories = [
     {
         id: 1,
-        name: "機械マニュファクチャリング",
+        name: "機械・製造",
         description: "造船・機械・金属など、愛媛の基幹となるものづくり産業",
         companies: [
             "(株)アテックス", "井関農機(株)", "潮冷熱(株)", "越智昇鉄工(株)",
@@ -27,7 +27,7 @@ const categories = [
     },
     {
         id: 3,
-        name: "社会基盤エンジニアリング",
+        name: "社会基盤",
         description: "建設・コンサルタント・プラント施工など、空間やインフラを築く産業",
         companies: [
             "(株)一宮工務店", "共立工営(株)", "(株)キクノ", "(株)コスにじゅういち",
@@ -130,13 +130,13 @@ function renderApp() {
                     </p>
                 </div>
 
-                <div class="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 overflow-hidden" id="company-grid">
+                <div class="flex-1 grid grid-cols-3 md:grid-cols-5 gap-1 sm:gap-3 overflow-y-auto no-scrollbar pb-4" id="company-grid">
                     ${category.companies.map(company => `
-                        <div class="cosmic-card p-2 flex flex-col items-center justify-center text-center group">
-                            <div class="w-full aspect-[16/10] mb-2 flex items-center justify-center p-1">
+                        <div class="cosmic-card p-1 sm:p-2 flex flex-col items-center justify-center text-center group">
+                            <div class="w-full aspect-[16/10] mb-1 sm:mb-2 flex items-center justify-center p-0.5 sm:p-1">
                                 ${createDummyLogo(company)}
                             </div>
-                            <span class="text-[9px] sm:text-[11px] font-medium text-slate-200 leading-tight tracking-wide group-hover:text-cyan-300 transition-colors">
+                            <span class="text-[8px] sm:text-[11px] font-medium text-slate-200 leading-tight tracking-wide group-hover:text-cyan-300 transition-colors" style="word-break: break-all;">
                                 ${company}
                             </span>
                         </div>

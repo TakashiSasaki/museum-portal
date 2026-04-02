@@ -89,9 +89,6 @@
     .cosmic-card {
         padding: 0.25rem !important;
     }
-    .cosmic-card .w-full {
-        display: none; /* 短い画面ではロゴを隠して文字のみにする */
-    }
 }
 
 /* ランドスケープ最適化 */
