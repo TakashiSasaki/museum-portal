@@ -183,39 +183,93 @@ document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
     }
     renderApp();
-    initBackgroundSetting();
-    initTextSetting();
+    
+    if (typeof firebase !== 'undefined') {
+        const db = firebase.firestore();
+        const docRef = db.collection('pageSettings').doc('renkei');
+
+        // 背景色のカスタマイザー設定
+        registerColorCustomizer({
+            db,
+            docRef,
+            triggerElement: document.body,
+            modalId: 'color-picker-modal',
+            firestoreField: 'backgroundColor',
+            presetBtnSelector: '.preset-color-btn',
+            applyValue: (val) => document.body.style.backgroundColor = val,
+            getCurrentValue: () => document.body.style.backgroundColor || window.getComputedStyle(document.body).backgroundColor,
+            excludeSelector: 'button, a, #color-picker-modal, #text-color-picker-modal, #page-title',
+            modalConfig: {
+                inputId: 'bg-color-input',
+                hexId: 'bg-color-hex',
+                cancelId: 'color-picker-cancel',
+                saveId: 'color-picker-save'
+            }
+        });
+
+        // タイトル色のカスタマイザー設定
+        const title = document.getElementById('page-title');
+        if (title) {
+            registerColorCustomizer({
+                db,
+                docRef,
+                triggerElement: title,
+                modalId: 'text-color-picker-modal',
+                firestoreField: 'titleColor',
+                presetBtnSelector: '.preset-text-color-btn',
+                applyValue: (val) => title.style.color = val,
+                getCurrentValue: () => title.style.color || window.getComputedStyle(title).color,
+                modalConfig: {
+                    inputId: 'text-color-input',
+                    hexId: 'text-color-hex',
+                    cancelId: 'text-color-picker-cancel',
+                    saveId: 'text-color-picker-save'
+                }
+            });
+        }
+    }
 });
 
 /**
- * 背景色設定の初期化とイベント設定（Firestore連携）
+ * カラーカスタマイザーの登録（共通ロジック）
  */
-function initBackgroundSetting() {
-    if (typeof firebase === 'undefined') return;
-    const db = firebase.firestore();
-
-    // 背景色の取得と適用 (リアルタイム)
-    db.collection('pageSettings').doc('renkei').onSnapshot((doc) => {
-        if (doc.exists && doc.data().backgroundColor) {
-            document.body.style.backgroundColor = doc.data().backgroundColor;
+function registerColorCustomizer({
+    db,
+    docRef,
+    triggerElement,
+    modalId,
+    firestoreField,
+    applyValue,
+    getCurrentValue,
+    presetBtnSelector,
+    excludeSelector,
+    modalConfig
+}) {
+    // 1. Firestore同期 (リアルタイム反映)
+    docRef.onSnapshot((doc) => {
+        if (doc.exists && doc.data()[firestoreField]) {
+            applyValue(doc.data()[firestoreField]);
         }
     });
 
-    // 長押し検知のロジック
+    // 2. DOM要素の取得
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+
+    const colorInput = document.getElementById(modalConfig.inputId);
+    const hexDisplay = document.getElementById(modalConfig.hexId);
+    const btnCancel = document.getElementById(modalConfig.cancelId);
+    const btnSave = document.getElementById(modalConfig.saveId);
+    const presetBtns = document.querySelectorAll(presetBtnSelector);
+
+    // 3. 長押し検知
     let longPressTimer;
     const pressDuration = 2000;
-    const modal = document.getElementById('color-picker-modal');
-    if (!modal) return;
-    
-    const colorInput = document.getElementById('bg-color-input');
-    const hexDisplay = document.getElementById('bg-color-hex');
-    const btnCancel = document.getElementById('color-picker-cancel');
-    const btnSave = document.getElementById('color-picker-save');
-    const presetBtns = document.querySelectorAll('.preset-color-btn');
 
     const startPress = (e) => {
-        // ボタンやナビゲーション、モーダル、またはタイトルテキスト自身へのタッチは無効化
-        if (e.target.closest('button') || e.target.closest('a') || e.target.closest('#color-picker-modal') || e.target.closest('#page-title')) return;
+        // 除外セレクタに一致する場合はスキップ
+        if (excludeSelector && e.target.closest(excludeSelector)) return;
+        
         longPressTimer = setTimeout(() => {
             showModal();
         }, pressDuration);
@@ -225,17 +279,18 @@ function initBackgroundSetting() {
         clearTimeout(longPressTimer);
     };
 
-    // マウス・タッチイベントの設定
-    document.body.addEventListener('mousedown', startPress);
-    document.body.addEventListener('mouseup', cancelPress);
-    document.body.addEventListener('mouseleave', cancelPress);
-    document.body.addEventListener('mousemove', cancelPress); // 動かしたらキャンセル
+    // イベント登録
+    triggerElement.addEventListener('mousedown', startPress);
+    triggerElement.addEventListener('mouseup', cancelPress);
+    triggerElement.addEventListener('mouseleave', cancelPress);
+    triggerElement.addEventListener('mousemove', cancelPress);
 
-    document.body.addEventListener('touchstart', startPress, { passive: true });
-    document.body.addEventListener('touchend', cancelPress, { passive: true });
-    document.body.addEventListener('touchcancel', cancelPress, { passive: true });
-    document.body.addEventListener('touchmove', cancelPress, { passive: true });
+    triggerElement.addEventListener('touchstart', startPress, { passive: true });
+    triggerElement.addEventListener('touchend', cancelPress);
+    triggerElement.addEventListener('touchcancel', cancelPress);
+    triggerElement.addEventListener('touchmove', cancelPress);
 
+    // 4. モーダル制御
     function showModal() {
         modal.classList.remove('hidden');
         setTimeout(() => {
@@ -243,20 +298,12 @@ function initBackgroundSetting() {
             modal.querySelector('div').classList.remove('scale-95');
         }, 10);
         
-        // 現在の背景色を取得してカラーピッカーに反映
-        const currentBg = document.body.style.backgroundColor;
-        if (currentBg) {
-            if (currentBg.startsWith('rgb')) {
-                const rgb = currentBg.match(/\d+/g);
-                if (rgb && rgb.length >= 3) {
-                    const hex = "#" + rgb.slice(0,3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
-                    colorInput.value = hex;
-                    hexDisplay.textContent = hex;
-                }
-            } else if (currentBg.startsWith('#')) {
-                colorInput.value = currentBg;
-                hexDisplay.textContent = currentBg;
-            }
+        // 現在の値を取得して反映
+        const currentVal = getCurrentValue();
+        const hex = colorToHex(currentVal);
+        if (hex) {
+            colorInput.value = hex;
+            hexDisplay.textContent = hex;
         }
     }
 
@@ -268,12 +315,11 @@ function initBackgroundSetting() {
         }, 300);
     }
 
-    // カラーピッカーの入力イベント
+    // 5. 内部イベント設定
     colorInput.addEventListener('input', (e) => {
         hexDisplay.textContent = e.target.value;
     });
 
-    // プリセットボタンのクリックイベント
     presetBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
             const color = e.target.dataset.color;
@@ -284,128 +330,31 @@ function initBackgroundSetting() {
         });
     });
 
-    // キャンセル・保存ボタンのイベント
     btnCancel.addEventListener('click', hideModal);
 
     btnSave.addEventListener('click', () => {
         const newColor = colorInput.value;
-        db.collection('pageSettings').doc('renkei').set(
-            { backgroundColor: newColor }, 
-            { merge: true }
-        ).then(() => {
-            hideModal();
-        }).catch(err => {
-            console.error('Error saving background color: ', err);
-            hideModal();
-        });
+        docRef.set({ [firestoreField]: newColor }, { merge: true })
+            .then(() => hideModal())
+            .catch(err => {
+                console.error(`Error saving ${firestoreField}: `, err);
+                hideModal();
+            });
     });
 }
 
 /**
- * タイトルテキスト色設定の初期化とイベント設定（Firestore連携）
+ * 各種カラー形式をHEXに変換するユーティリティ
  */
-function initTextSetting() {
-    if (typeof firebase === 'undefined') return;
-    const db = firebase.firestore();
-    const title = document.getElementById('page-title');
-    if (!title) return;
-
-    // タイトル色の取得と適用 (リアルタイム)
-    db.collection('pageSettings').doc('renkei').onSnapshot((doc) => {
-        if (doc.exists && doc.data().titleColor) {
-            title.style.color = doc.data().titleColor;
-        }
-    });
-
-    // 長押し検知のロジック
-    let longPressTimer;
-    const pressDuration = 2000;
-    const modal = document.getElementById('text-color-picker-modal');
-    if (!modal) return;
+function colorToHex(color) {
+    if (!color) return null;
+    if (color.startsWith('#')) return color;
     
-    const colorInput = document.getElementById('text-color-input');
-    const hexDisplay = document.getElementById('text-color-hex');
-    const btnCancel = document.getElementById('text-color-picker-cancel');
-    const btnSave = document.getElementById('text-color-picker-save');
-    const presetBtns = document.querySelectorAll('.preset-text-color-btn');
-
-    const startPress = (e) => {
-        longPressTimer = setTimeout(() => {
-            showModal();
-        }, pressDuration);
-    };
-
-    const cancelPress = () => {
-        clearTimeout(longPressTimer);
-    };
-
-    // タイトル要素に対するイベント設定
-    title.addEventListener('mousedown', startPress);
-    title.addEventListener('mouseup', cancelPress);
-    title.addEventListener('mouseleave', cancelPress);
-    title.addEventListener('mousemove', cancelPress);
-
-    title.addEventListener('touchstart', startPress, { passive: true });
-    title.addEventListener('touchend', cancelPress);
-    title.addEventListener('touchcancel', cancelPress);
-    title.addEventListener('touchmove', cancelPress);
-
-    function showModal() {
-        modal.classList.remove('hidden');
-        setTimeout(() => {
-            modal.classList.remove('opacity-0');
-            modal.querySelector('div').classList.remove('scale-95');
-        }, 10);
-        
-        // 現在のテキスト色を取得してカラーピッカーに反映
-        const currentColor = window.getComputedStyle(title).color;
-        if (currentColor) {
-            const rgb = currentColor.match(/\d+/g);
-            if (rgb && rgb.length >= 3) {
-                const hex = "#" + rgb.slice(0,3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
-                colorInput.value = hex;
-                hexDisplay.textContent = hex;
-            }
-        }
+    const rgb = color.match(/\d+/g);
+    if (rgb && rgb.length >= 3) {
+        return "#" + rgb.slice(0,3).map(x => 
+            parseInt(x).toString(16).padStart(2, '0')
+        ).join('');
     }
-
-    function hideModal() {
-        modal.classList.add('opacity-0');
-        modal.querySelector('div').classList.add('scale-95');
-        setTimeout(() => {
-            modal.classList.add('hidden');
-        }, 300);
-    }
-
-    // カラーピッカーの入力イベント
-    colorInput.addEventListener('input', (e) => {
-        hexDisplay.textContent = e.target.value;
-    });
-
-    // プリセットボタンのクリックイベント
-    presetBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const color = e.target.dataset.color;
-            if (color) {
-                colorInput.value = color;
-                hexDisplay.textContent = color;
-            }
-        });
-    });
-
-    // キャンセル・保存ボタンのイベント
-    btnCancel.addEventListener('click', hideModal);
-
-    btnSave.addEventListener('click', () => {
-        const newColor = colorInput.value;
-        db.collection('pageSettings').doc('renkei').set(
-            { titleColor: newColor }, 
-            { merge: true }
-        ).then(() => {
-            hideModal();
-        }).catch(err => {
-            console.error('Error saving text color: ', err);
-            hideModal();
-        });
-    });
+    return null;
 }
