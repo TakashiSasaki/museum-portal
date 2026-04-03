@@ -108,7 +108,7 @@ function createDummyLogo(name) {
 /**
  * UI の描画
  */
-function renderApp() {
+function renderApp(db, docRef) {
     const tabNav = document.getElementById('tab-navigation');
     const contentArea = document.getElementById('tab-content');
     let activeTabId = categories[0].id;
@@ -130,10 +130,10 @@ function renderApp() {
         contentArea.innerHTML = `
             <div class="flex flex-col h-full">
                 <div class="mb-2 sm:mb-4 px-2">
-                    <h2 class="text-base sm:text-xl font-bold text-cyan-300 border-l-4 border-[#b1a348] pl-3 drop-shadow-glow">
+                    <h2 id="category-title" class="text-base sm:text-xl font-bold text-cyan-300 border-l-4 border-[#b1a348] pl-3 drop-shadow-glow transition-colors duration-300">
                         ${category.name}
                     </h2>
-                    <p class="text-[10px] sm:text-sm text-slate-400 mt-1 ml-4 opacity-80">
+                    <p id="category-description" class="text-[10px] sm:text-sm text-slate-400 mt-1 ml-4 opacity-80 transition-colors duration-300">
                         ${category.description}
                     </p>
                 </div>
@@ -156,6 +156,49 @@ function renderApp() {
                 </div>
             </div>
         `;
+
+        // 動的に生成された要素にカスタマイザーを登録
+        if (db && docRef) {
+            const catTitle = document.getElementById('category-title');
+            if (catTitle) {
+                registerColorCustomizer({
+                    db,
+                    docRef,
+                    triggerElement: catTitle,
+                    modalId: 'cat-title-color-picker-modal',
+                    firestoreField: 'categoryTitleColor',
+                    presetBtnSelector: '.preset-cat-title-color-btn',
+                    applyValue: (val) => catTitle.style.color = val,
+                    getCurrentValue: () => catTitle.style.color || window.getComputedStyle(catTitle).color,
+                    modalConfig: {
+                        inputId: 'cat-title-color-input',
+                        hexId: 'cat-title-color-hex',
+                        cancelId: 'cat-title-color-picker-cancel',
+                        saveId: 'cat-title-color-picker-save'
+                    }
+                });
+            }
+
+            const catDesc = document.getElementById('category-description');
+            if (catDesc) {
+                registerColorCustomizer({
+                    db,
+                    docRef,
+                    triggerElement: catDesc,
+                    modalId: 'cat-desc-color-picker-modal',
+                    firestoreField: 'categoryDescriptionColor',
+                    presetBtnSelector: '.preset-cat-desc-color-btn',
+                    applyValue: (val) => catDesc.style.color = val,
+                    getCurrentValue: () => catDesc.style.color || window.getComputedStyle(catDesc).color,
+                    modalConfig: {
+                        inputId: 'cat-desc-color-input',
+                        hexId: 'cat-desc-color-hex',
+                        cancelId: 'cat-desc-color-picker-cancel',
+                        saveId: 'cat-desc-color-picker-save'
+                    }
+                });
+            }
+        }
     };
 
     // 初期タブの生成
@@ -179,14 +222,10 @@ function renderApp() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
-    renderApp();
-    
+    let db, docRef;
     if (typeof firebase !== 'undefined') {
-        const db = firebase.firestore();
-        const docRef = db.collection('pageSettings').doc('renkei');
+        db = firebase.firestore();
+        docRef = db.collection('pageSettings').doc('renkei');
 
         // 背景色のカスタマイザー設定
         registerColorCustomizer({
@@ -198,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
             presetBtnSelector: '.preset-color-btn',
             applyValue: (val) => document.body.style.backgroundColor = val,
             getCurrentValue: () => document.body.style.backgroundColor || window.getComputedStyle(document.body).backgroundColor,
-            excludeSelector: 'button, a, #color-picker-modal, #text-color-picker-modal, #page-title',
+            excludeSelector: 'button, a, #color-picker-modal, #text-color-picker-modal, #page-title, #cat-title-color-picker-modal, #cat-desc-color-picker-modal, #category-title, #category-description',
             modalConfig: {
                 inputId: 'bg-color-input',
                 hexId: 'bg-color-hex',
@@ -228,6 +267,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     }
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+    renderApp(db, docRef);
 });
 
 /**
@@ -316,23 +360,27 @@ function registerColorCustomizer({
     }
 
     // 5. 内部イベント設定
-    colorInput.addEventListener('input', (e) => {
+    const onInput = (e) => {
         hexDisplay.textContent = e.target.value;
-    });
+    };
+    colorInput.removeEventListener('input', onInput);
+    colorInput.addEventListener('input', onInput);
 
     presetBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        const onClick = (e) => {
             const color = e.target.dataset.color;
             if (color) {
                 colorInput.value = color;
                 hexDisplay.textContent = color;
             }
-        });
+        };
+        btn.removeEventListener('click', onClick);
+        btn.addEventListener('click', onClick);
     });
 
-    btnCancel.addEventListener('click', hideModal);
+    btnCancel.onclick = hideModal;
 
-    btnSave.addEventListener('click', () => {
+    btnSave.onclick = () => {
         const newColor = colorInput.value;
         docRef.set({ [firestoreField]: newColor }, { merge: true })
             .then(() => hideModal())
@@ -340,7 +388,7 @@ function registerColorCustomizer({
                 console.error(`Error saving ${firestoreField}: `, err);
                 hideModal();
             });
-    });
+    };
 }
 
 /**

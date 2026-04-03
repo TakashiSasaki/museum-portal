@@ -138,6 +138,68 @@
             </div>
         </div>
     </div>
+    <!-- Category Title Color Picker Modal -->
+    <div id="cat-title-color-picker-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-900 border border-slate-700/50 rounded-2xl p-6 shadow-2xl w-11/12 max-w-sm transform scale-95 transition-transform duration-300 text-slate-200">
+            <h3 class="text-lg font-bold mb-4 text-cyan-300 drop-shadow-glow flex items-center gap-2">
+                <i data-lucide="hash" class="w-5 h-5"></i>
+                カテゴリー名の設定
+            </h3>
+            
+            <div class="mb-4">
+                <label for="cat-title-color-input" class="block text-xs text-slate-400 mb-2">カスタムカラーを選択</label>
+                <div class="flex items-center gap-3">
+                    <input type="color" id="cat-title-color-input" class="w-12 h-12 rounded cursor-pointer border-0 bg-transparent p-0" value="#67e8f9">
+                    <span id="cat-title-color-hex" class="text-sm font-mono bg-slate-800 px-3 py-1 rounded w-full border border-slate-700">#67e8f9</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs text-slate-400 mb-2">プリセット</label>
+                <div class="flex flex-wrap gap-2">
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#67e8f9] preset-cat-title-color-btn" data-color="#67e8f9" aria-label="Cyan"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#f8fafc] preset-cat-title-color-btn" data-color="#f8fafc" aria-label="White"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#eab308] preset-cat-title-color-btn" data-color="#eab308" aria-label="Yellow"></button>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button id="cat-title-color-picker-cancel" class="px-4 py-2 rounded text-sm text-slate-400 hover:text-white transition-colors">キャンセル</button>
+                <button id="cat-title-color-picker-save" class="px-4 py-2 rounded text-sm bg-cyan-600 hover:bg-cyan-500 text-white font-medium transition-colors shadow-lg shadow-cyan-900/50">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Description Color Picker Modal -->
+    <div id="cat-desc-color-picker-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-900 border border-slate-700/50 rounded-2xl p-6 shadow-2xl w-11/12 max-w-sm transform scale-95 transition-transform duration-300 text-slate-200">
+            <h3 class="text-lg font-bold mb-4 text-slate-400 flex items-center gap-2">
+                <i data-lucide="info" class="w-5 h-5"></i>
+                カテゴリー説明の設定
+            </h3>
+            
+            <div class="mb-4">
+                <label for="cat-desc-color-input" class="block text-xs text-slate-400 mb-2">カスタムカラーを選択</label>
+                <div class="flex items-center gap-3">
+                    <input type="color" id="cat-desc-color-input" class="w-12 h-12 rounded cursor-pointer border-0 bg-transparent p-0" value="#94a3b8">
+                    <span id="cat-desc-color-hex" class="text-sm font-mono bg-slate-800 px-3 py-1 rounded w-full border border-slate-700">#94a3b8</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs text-slate-400 mb-2">プリセット</label>
+                <div class="flex flex-wrap gap-2">
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#94a3b8] preset-cat-desc-color-btn" data-color="#94a3b8" aria-label="Slate"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#cbd5e1] preset-cat-desc-color-btn" data-color="#cbd5e1" aria-label="Slate Light"></button>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button id="cat-desc-color-picker-cancel" class="px-4 py-2 rounded text-sm text-slate-400 hover:text-white transition-colors">キャンセル</button>
+                <button id="cat-desc-color-picker-save" class="px-4 py-2 rounded text-sm bg-cyan-600 hover:bg-cyan-500 text-white font-medium transition-colors shadow-lg shadow-cyan-900/50">保存</button>
+            </div>
+        </div>
+    </div>
     <script src="index.js" defer></script>
 </body>
 
