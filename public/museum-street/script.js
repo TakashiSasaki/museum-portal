@@ -201,6 +201,28 @@ document.addEventListener('DOMContentLoaded', () => {
             loadMapContent(defaultPage);
         }
     }
+
+    // Initial menu state for mobile
+    if (window.innerWidth < 768) {
+        if (navContainer && navBackdrop) {
+            // Disable transitions temporarily to open without animation
+            navContainer.style.transition = 'none';
+            navBackdrop.style.transition = 'none';
+
+            navBackdrop.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+            navContainer.classList.remove('-translate-x-full');
+            navContainer.classList.add('translate-x-0');
+
+            // Force reflow
+            navContainer.offsetHeight;
+
+            // Re-enable transitions
+            setTimeout(() => {
+                navContainer.style.transition = '';
+                navBackdrop.style.transition = '';
+            }, 0);
+        }
+    }
     
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
