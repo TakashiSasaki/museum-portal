@@ -11,5 +11,8 @@ service cloud.firestore {
     match /portalCards/{document=**} {
       allow read, write: if true;
     }
+    match /pageSettings/{document=**} {
+      allow read, write: if true;
+    }
   }
 }
