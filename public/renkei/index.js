@@ -142,10 +142,10 @@ function renderApp(db, docRef) {
 
                 <div class="flex-1 grid grid-cols-3 md:grid-cols-5 gap-1 sm:gap-3 overflow-y-auto no-scrollbar pb-4" id="company-grid">
                     ${category.companies.map(company => `
-                        <div class="cosmic-card p-1 sm:p-2 flex flex-col items-center justify-center text-center group min-h-0" data-customizable="true">
-                            <!-- Logo container: allowed to shrink -->
-                            <div class="w-full flex-shrink min-h-0 flex items-center justify-center p-0.5 sm:p-1 mb-1 sm:mb-2 pointer-events-none">
-                                <div class="w-full aspect-[16/10]">
+                        <div class="cosmic-card p-1 sm:p-2 group min-h-0" data-customizable="true">
+                            <!-- Logo container: flexible scaling to avoid overlap -->
+                            <div class="w-full flex-1 min-h-0 flex items-center justify-center p-0.5 sm:p-1 mb-1 sm:mb-2 pointer-events-none overflow-hidden">
+                                <div class="w-full h-full max-h-[100%] flex items-center justify-center">
                                     ${createDummyLogo(company)}
                                 </div>
                             </div>
