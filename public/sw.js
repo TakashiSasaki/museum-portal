@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v12'; // Updated for renkei directory and municipal tab
+const CORE_CACHE_VERSION = 'v13'; // Updated for renkei directory and municipal tab
 const API_CACHE_VERSION = 'v2';
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -198,7 +198,7 @@ async function handleStaticAssetRequest(request) {
       await cache.put(request, networkResponse.clone());
       return networkResponse;
     }
-    
+
     // Fallback to cache if network response is not OK (e.g. 404, 500)
     const cachedResponse = await caches.match(request, { ignoreSearch: true });
     return cachedResponse || networkResponse;
