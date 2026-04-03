@@ -269,8 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
             firestoreField: 'backgroundColor',
             presetBtnSelector: '.preset-color-btn',
             getCurrentValue: () => document.body.style.backgroundColor || window.getComputedStyle(document.body).backgroundColor,
-            // Customizable 属性を持つ要素を確実に除外
-            excludeSelector: 'button, a, [data-customizable="true"], #color-picker-modal, #text-color-picker-modal, #cat-title-color-picker-modal, #cat-desc-color-picker-modal',
+            // Customizable 属性を持つ要素とその子要素を確実に除外
+            excludeSelector: 'button, a, [data-customizable="true"], [data-customizable="true"] *, #color-picker-modal, #text-color-picker-modal, #cat-title-color-picker-modal, #cat-desc-color-picker-modal',
             modalConfig: {
                 inputId: 'bg-color-input',
                 hexId: 'bg-color-hex',
