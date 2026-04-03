@@ -172,35 +172,39 @@ function renderApp(db, docRef) {
         // 動的に生成された要素にカスタマイザーを登録（トリガーのみ）
         if (db && docRef) {
             if (catTitle) {
-                registerColorCustomizer({
+                registerMultiColorCustomizer({
                     triggerElement: catTitle,
                     modalId: 'cat-title-color-picker-modal',
-                    firestoreField: 'categoryTitleColor',
+                    fields: [
+                        {
+                            firestoreField: 'categoryTitleColor',
+                            inputId: 'cat-title-color-input',
+                            hexId: 'cat-title-color-hex',
+                            getCurrentValue: () => catTitle.style.color || window.getComputedStyle(catTitle).color
+                        }
+                    ],
                     presetBtnSelector: '.preset-cat-title-color-btn',
-                    getCurrentValue: () => catTitle.style.color || window.getComputedStyle(catTitle).color,
-                    modalConfig: {
-                        inputId: 'cat-title-color-input',
-                        hexId: 'cat-title-color-hex',
-                        cancelId: 'cat-title-color-picker-cancel',
-                        saveId: 'cat-title-color-picker-save'
-                    },
+                    cancelId: 'cat-title-color-picker-cancel',
+                    saveId: 'cat-title-color-picker-save',
                     docRef
                 });
             }
 
             if (catDesc) {
-                registerColorCustomizer({
+                registerMultiColorCustomizer({
                     triggerElement: catDesc,
                     modalId: 'cat-desc-color-picker-modal',
-                    firestoreField: 'categoryDescriptionColor',
+                    fields: [
+                        {
+                            firestoreField: 'categoryDescriptionColor',
+                            inputId: 'cat-desc-color-input',
+                            hexId: 'cat-desc-color-hex',
+                            getCurrentValue: () => catDesc.style.color || window.getComputedStyle(catDesc).color
+                        }
+                    ],
                     presetBtnSelector: '.preset-cat-desc-color-btn',
-                    getCurrentValue: () => catDesc.style.color || window.getComputedStyle(catDesc).color,
-                    modalConfig: {
-                        inputId: 'cat-desc-color-input',
-                        hexId: 'cat-desc-color-hex',
-                        cancelId: 'cat-desc-color-picker-cancel',
-                        saveId: 'cat-desc-color-picker-save'
-                    },
+                    cancelId: 'cat-desc-color-picker-cancel',
+                    saveId: 'cat-desc-color-picker-save',
                     docRef
                 });
             }
@@ -209,10 +213,62 @@ function renderApp(db, docRef) {
 
     // 初期タブの生成
     tabNav.innerHTML = categories.map(category => `
-        <button class="tab-btn px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-medium transition-all duration-300 whitespace-nowrap" data-id="${category.id}">
+        <button class="tab-btn px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-medium transition-all duration-300 whitespace-nowrap" 
+                data-id="${category.id}" data-customizable="true">
             ${category.name}
         </button>
     `).join('');
+
+    // タブナビゲーション自体のカスタマイザー登録（アクティブ/非アクティブの切り替え）
+    if (db && docRef) {
+        // アクティブタブ用
+        registerMultiColorCustomizer({
+            triggerElement: tabNav,
+            modalId: 'active-tab-style-modal',
+            excludeSelector: '.tab-btn:not(.active)', // 非アクティブ時は無視
+            fields: [
+                {
+                    firestoreField: 'tabActiveTextColor',
+                    inputId: 'tab-active-text-input',
+                    hexId: 'tab-active-text-hex',
+                    getCurrentValue: () => getComputedStyle(document.documentElement).getPropertyValue('--tab-active-text').trim()
+                },
+                {
+                    firestoreField: 'tabActiveBgColor',
+                    inputId: 'tab-active-bg-input',
+                    hexId: 'tab-active-bg-hex',
+                    getCurrentValue: () => getComputedStyle(document.documentElement).getPropertyValue('--tab-active-bg').trim()
+                }
+            ],
+            cancelId: 'active-tab-style-cancel',
+            saveId: 'active-tab-style-save',
+            docRef
+        });
+
+        // 非アクティブタブ用
+        registerMultiColorCustomizer({
+            triggerElement: tabNav,
+            modalId: 'inactive-tab-style-modal',
+            excludeSelector: '.tab-btn.active', // アクティブ時は無視
+            fields: [
+                {
+                    firestoreField: 'tabInactiveTextColor',
+                    inputId: 'tab-inactive-text-input',
+                    hexId: 'tab-inactive-text-hex',
+                    getCurrentValue: () => getComputedStyle(document.documentElement).getPropertyValue('--tab-inactive-text').trim()
+                },
+                {
+                    firestoreField: 'tabInactiveBgColor',
+                    inputId: 'tab-inactive-bg-input',
+                    hexId: 'tab-inactive-bg-hex',
+                    getCurrentValue: () => getComputedStyle(document.documentElement).getPropertyValue('--tab-inactive-bg').trim()
+                }
+            ],
+            cancelId: 'inactive-tab-style-cancel',
+            saveId: 'inactive-tab-style-save',
+            docRef
+        });
+    }
 
     // イベントリスナー
     tabNav.addEventListener('click', (e) => {
@@ -234,7 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
         docRef = db.collection('pageSettings').doc('renkei');
 
         // Firestore同期設定（一度だけ登録）
-        const fields = [
+        // CSS Variables を使用して共通化
+        const syncFields = [
             { id: 'backgroundColor', apply: (v) => document.body.style.backgroundColor = v },
             { id: 'titleColor', apply: (v) => {
                 const el = document.getElementById('page-title');
@@ -247,54 +304,60 @@ document.addEventListener('DOMContentLoaded', () => {
             { id: 'categoryDescriptionColor', apply: (v) => {
                 const el = document.getElementById('category-description');
                 if (el) el.style.color = v;
-            }}
+            }},
+            // タブ用（CSS Variables）
+            { id: 'tabActiveTextColor', apply: (v) => document.documentElement.style.setProperty('--tab-active-text', v) },
+            { id: 'tabActiveBgColor', apply: (v) => document.documentElement.style.setProperty('--tab-active-bg', v) },
+            { id: 'tabInactiveTextColor', apply: (v) => document.documentElement.style.setProperty('--tab-inactive-text', v) },
+            { id: 'tabInactiveBgColor', apply: (v) => document.documentElement.style.setProperty('--tab-inactive-bg', v) }
         ];
 
         docRef.onSnapshot((doc) => {
             if (doc.exists) {
                 const data = doc.data();
-                // グローバルステートに保存
                 currentSettings = { ...currentSettings, ...data };
-                // 現在表示されている要素に適用
-                fields.forEach(field => {
+                syncFields.forEach(field => {
                     if (data[field.id]) field.apply(data[field.id]);
                 });
             }
         });
 
         // 背景色のカスタマイザー設定
-        registerColorCustomizer({
+        registerMultiColorCustomizer({
             triggerElement: document.body,
             modalId: 'color-picker-modal',
-            firestoreField: 'backgroundColor',
+            fields: [
+                {
+                    firestoreField: 'backgroundColor',
+                    inputId: 'bg-color-input',
+                    hexId: 'bg-color-hex',
+                    getCurrentValue: () => document.body.style.backgroundColor || window.getComputedStyle(document.body).backgroundColor
+                }
+            ],
             presetBtnSelector: '.preset-color-btn',
-            getCurrentValue: () => document.body.style.backgroundColor || window.getComputedStyle(document.body).backgroundColor,
-            // Customizable 属性を持つ要素とその子要素を確実に除外
-            excludeSelector: 'button, a, [data-customizable="true"], [data-customizable="true"] *, #color-picker-modal, #text-color-picker-modal, #cat-title-color-picker-modal, #cat-desc-color-picker-modal',
-            modalConfig: {
-                inputId: 'bg-color-input',
-                hexId: 'bg-color-hex',
-                cancelId: 'color-picker-cancel',
-                saveId: 'color-picker-save'
-            },
+            excludeSelector: 'button, a, [data-customizable="true"], [data-customizable="true"] *, #color-picker-modal, #text-color-picker-modal, #cat-title-color-picker-modal, #cat-desc-color-picker-modal, #active-tab-style-modal, #inactive-tab-style-modal',
+            cancelId: 'color-picker-cancel',
+            saveId: 'color-picker-save',
             docRef
         });
 
         // タイトル色のカスタマイザー設定
         const title = document.getElementById('page-title');
         if (title) {
-            registerColorCustomizer({
+            registerMultiColorCustomizer({
                 triggerElement: title,
                 modalId: 'text-color-picker-modal',
-                firestoreField: 'titleColor',
+                fields: [
+                    {
+                        firestoreField: 'titleColor',
+                        inputId: 'text-color-input',
+                        hexId: 'text-color-hex',
+                        getCurrentValue: () => title.style.color || window.getComputedStyle(title).color
+                    }
+                ],
                 presetBtnSelector: '.preset-text-color-btn',
-                getCurrentValue: () => title.style.color || window.getComputedStyle(title).color,
-                modalConfig: {
-                    inputId: 'text-color-input',
-                    hexId: 'text-color-hex',
-                    cancelId: 'text-color-picker-cancel',
-                    saveId: 'text-color-picker-save'
-                },
+                cancelId: 'text-color-picker-cancel',
+                saveId: 'text-color-picker-save',
                 docRef
             });
         }
@@ -307,37 +370,38 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * カラーカスタマイザーの登録（共通ロジック）
+ * マルチフィールド対応カラーカスタマイザーの登録
  */
-function registerColorCustomizer({
+function registerMultiColorCustomizer({
     triggerElement,
     modalId,
-    firestoreField,
-    getCurrentValue,
+    fields, // 配列: [{ firestoreField, inputId, hexId, getCurrentValue }]
     presetBtnSelector,
     excludeSelector,
-    modalConfig,
+    cancelId,
+    saveId,
     docRef
 }) {
-    // 2. DOM要素の取得
     const modal = document.getElementById(modalId);
     if (!modal) return;
 
-    const colorInput = document.getElementById(modalConfig.inputId);
-    const hexDisplay = document.getElementById(modalConfig.hexId);
-    const btnCancel = document.getElementById(modalConfig.cancelId);
-    const btnSave = document.getElementById(modalConfig.saveId);
-    const presetBtns = document.querySelectorAll(presetBtnSelector);
+    const btnCancel = document.getElementById(cancelId);
+    const btnSave = document.getElementById(saveId);
+    const presetBtns = presetBtnSelector ? document.querySelectorAll(presetBtnSelector) : [];
 
-    // 3. 長押し検知
+    // 各フィールドの要素を取得して紐付け
+    const fieldElements = fields.map(f => ({
+        ...f,
+        input: document.getElementById(f.inputId),
+        hex: document.getElementById(f.hexId)
+    }));
+
     let longPressTimer;
     const pressDuration = 2000;
 
     const startPress = (e) => {
-        // 重要: 除外セレクタに一致する場合はこのリスナーでの処理を完全にスキップ
         if (excludeSelector && e.target.closest(excludeSelector)) return;
         
-        // 特定要素（body以外）の場合、イベント伝播を止めて親（body）のリスナー起動を防ぐ
         if (triggerElement !== document.body) {
             e.stopPropagation();
         }
@@ -360,13 +424,12 @@ function registerColorCustomizer({
     triggerElement.addEventListener('mouseleave', cancelPress);
     triggerElement.addEventListener('mousemove', cancelPress);
 
-    // touchstart は stopPropagation を効かせるため passive: false に
     triggerElement.addEventListener('touchstart', startPress, { passive: false });
     triggerElement.addEventListener('touchend', cancelPress);
     triggerElement.addEventListener('touchcancel', cancelPress);
     triggerElement.addEventListener('touchmove', cancelPress);
 
-    // 4. モーダル制御
+    // モーダル制御
     function showModal() {
         modal.classList.remove('hidden');
         setTimeout(() => {
@@ -374,13 +437,15 @@ function registerColorCustomizer({
             modal.querySelector('div').classList.remove('scale-95');
         }, 10);
         
-        // 現在の値を取得して反映
-        const currentVal = getCurrentValue();
-        const hex = colorToHex(currentVal);
-        if (hex) {
-            colorInput.value = hex;
-            hexDisplay.textContent = hex;
-        }
+        // 全フィールドの現在の値を反映
+        fieldElements.forEach(f => {
+            const currentVal = f.getCurrentValue();
+            const hex = colorToHex(currentVal);
+            if (hex && f.input) {
+                f.input.value = hex;
+                if (f.hex) f.hex.textContent = hex;
+            }
+        });
     }
 
     function hideModal() {
@@ -391,19 +456,24 @@ function registerColorCustomizer({
         }, 300);
     }
 
-    // 5. 内部イベント設定
-    const onInput = (e) => {
-        hexDisplay.textContent = e.target.value;
-    };
-    colorInput.removeEventListener('input', onInput);
-    colorInput.addEventListener('input', onInput);
+    // 各入力欄の監視
+    fieldElements.forEach(f => {
+        if (f.input && f.hex) {
+            const onInput = (e) => {
+                f.hex.textContent = e.target.value;
+            };
+            f.input.removeEventListener('input', onInput);
+            f.input.addEventListener('input', onInput);
+        }
+    });
 
+    // プリセットボタン（最初のフィールドにのみ適用する仕様、または用途に合わせて調整）
     presetBtns.forEach(btn => {
         const onClick = (e) => {
             const color = e.target.dataset.color;
-            if (color) {
-                colorInput.value = color;
-                hexDisplay.textContent = color;
+            if (color && fieldElements[0].input) {
+                fieldElements[0].input.value = color;
+                if (fieldElements[0].hex) fieldElements[0].hex.textContent = color;
             }
         };
         btn.removeEventListener('click', onClick);
@@ -413,23 +483,32 @@ function registerColorCustomizer({
     btnCancel.onclick = hideModal;
 
     btnSave.onclick = () => {
-        const newColor = colorInput.value;
-        docRef.set({ [firestoreField]: newColor }, { merge: true })
+        const updateData = {};
+        fieldElements.forEach(f => {
+            if (f.input) updateData[f.firestoreField] = f.input.value;
+        });
+
+        docRef.set(updateData, { merge: true })
             .then(() => hideModal())
             .catch(err => {
-                console.error(`Error saving ${firestoreField}: `, err);
+                console.error(`Error saving multiple fields: `, err);
                 hideModal();
             });
     };
 }
 
 /**
- * 各種カラー形式をHEXに変換するユーティリティ
+ * カラー形式変換（略）
  */
 function colorToHex(color) {
     if (!color) return null;
-    if (color.startsWith('#')) return color;
+    if (color.startsWith('#')) {
+        // アルファチャンネル付き (8桁) の場合は 6桁に丸める（標準 color picker 用、必要に応じて調整）
+        return color.length === 9 ? color.substring(0, 7) : color;
+    }
     
+    // rgb / rgba 
+    const isRgba = color.includes('rgba');
     const rgb = color.match(/\d+/g);
     if (rgb && rgb.length >= 3) {
         return "#" + rgb.slice(0,3).map(x => 

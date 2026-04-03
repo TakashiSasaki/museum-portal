@@ -25,9 +25,9 @@
 
 /* タブボタンのスタイル */
 .tab-btn {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--tab-inactive-bg, rgba(255, 255, 255, 0.05));
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94a3b8;
+    color: var(--tab-inactive-text, #94a3b8);
     cursor: pointer;
 }
 
@@ -37,9 +37,9 @@
 }
 
 .tab-btn.active {
-    background: linear-gradient(135deg, #024252 0%, #050510 100%);
-    border-color: #67e8f9;
-    color: #67e8f9;
+    background: var(--tab-active-bg, linear-gradient(135deg, #024252 0%, #050510 100%));
+    border-color: var(--tab-active-text, #67e8f9);
+    color: var(--tab-active-text, #67e8f9);
     box-shadow: 0 0 15px rgba(103, 232, 249, 0.3);
 }
 
