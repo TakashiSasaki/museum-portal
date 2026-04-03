@@ -18,6 +18,11 @@
 
     <!-- SEO & Icons -->
     <link rel="canonical" href="https://museum-portal.moukaeritai.work/renkei/" />
+
+    <!-- Firebase SDK -->
+    <script src="/__/firebase/8.10.1/firebase-app.js"></script>
+    <script src="/__/firebase/8.10.1/firebase-firestore.js"></script>
+    <script src="/__/firebase/init.js"></script>
 </head>
 
 <body class="p-0 m-0 h-[100dvh] flex flex-col items-center relative overflow-hidden bg-black text-slate-200">
@@ -66,6 +71,40 @@
                 Ehime Univ. Museum // Collaboration</p>
         </div>
     </footer>
+
+    <!-- Color Picker Modal -->
+    <div id="color-picker-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-900 border border-slate-700/50 rounded-2xl p-6 shadow-2xl w-11/12 max-w-sm transform scale-95 transition-transform duration-300 text-slate-200">
+            <h3 class="text-lg font-bold mb-4 text-cyan-300 drop-shadow-glow flex items-center gap-2">
+                <i data-lucide="palette" class="w-5 h-5"></i>
+                背景色の設定
+            </h3>
+            
+            <div class="mb-4">
+                <label for="bg-color-input" class="block text-xs text-slate-400 mb-2">カスタムカラーを選択</label>
+                <div class="flex items-center gap-3">
+                    <input type="color" id="bg-color-input" class="w-12 h-12 rounded cursor-pointer border-0 bg-transparent p-0" value="#000000">
+                    <span id="bg-color-hex" class="text-sm font-mono bg-slate-800 px-3 py-1 rounded w-full border border-slate-700">#000000</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs text-slate-400 mb-2">プリセット</label>
+                <div class="flex flex-wrap gap-2">
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#000000] preset-color-btn" data-color="#000000" aria-label="Black"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#0f172a] preset-color-btn" data-color="#0f172a" aria-label="Slate"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#172554] preset-color-btn" data-color="#172554" aria-label="Blue"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#2e1065] preset-color-btn" data-color="#2e1065" aria-label="Purple"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#064e3b] preset-color-btn" data-color="#064e3b" aria-label="Emerald"></button>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button id="color-picker-cancel" class="px-4 py-2 rounded text-sm text-slate-400 hover:text-white transition-colors">キャンセル</button>
+                <button id="color-picker-save" class="px-4 py-2 rounded text-sm bg-cyan-600 hover:bg-cyan-500 text-white font-medium transition-colors shadow-lg shadow-cyan-900/50">保存</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Page Logic -->
     <script src="index.js" defer></script>

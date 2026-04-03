@@ -183,4 +183,119 @@ document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
     }
     renderApp();
+    initBackgroundSetting();
 });
+
+/**
+ * 背景色設定の初期化とイベント設定（Firestore連携）
+ */
+function initBackgroundSetting() {
+    if (typeof firebase === 'undefined') return;
+    const db = firebase.firestore();
+
+    // 背景色の取得と適用 (リアルタイム)
+    db.collection('pageSettings').doc('renkei').onSnapshot((doc) => {
+        if (doc.exists && doc.data().backgroundColor) {
+            document.body.style.backgroundColor = doc.data().backgroundColor;
+        }
+    });
+
+    // 長押し検知のロジック
+    let longPressTimer;
+    const pressDuration = 2000;
+    const modal = document.getElementById('color-picker-modal');
+    if (!modal) return;
+    
+    const colorInput = document.getElementById('bg-color-input');
+    const hexDisplay = document.getElementById('bg-color-hex');
+    const btnCancel = document.getElementById('color-picker-cancel');
+    const btnSave = document.getElementById('color-picker-save');
+    const presetBtns = document.querySelectorAll('.preset-color-btn');
+
+    const startPress = (e) => {
+        // ボタンやナビゲーション、モーダル自身へのタッチは無効化
+        if (e.target.closest('button') || e.target.closest('a') || e.target.closest('#color-picker-modal')) return;
+        longPressTimer = setTimeout(() => {
+            showModal();
+        }, pressDuration);
+    };
+
+    const cancelPress = () => {
+        clearTimeout(longPressTimer);
+    };
+
+    // マウス・タッチイベントの設定
+    document.body.addEventListener('mousedown', startPress);
+    document.body.addEventListener('mouseup', cancelPress);
+    document.body.addEventListener('mouseleave', cancelPress);
+    document.body.addEventListener('mousemove', cancelPress); // 動かしたらキャンセル
+
+    document.body.addEventListener('touchstart', startPress, { passive: true });
+    document.body.addEventListener('touchend', cancelPress, { passive: true });
+    document.body.addEventListener('touchcancel', cancelPress, { passive: true });
+    document.body.addEventListener('touchmove', cancelPress, { passive: true });
+
+    function showModal() {
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            modal.querySelector('div').classList.remove('scale-95');
+        }, 10);
+        
+        // 現在の背景色を取得してカラーピッカーに反映
+        const currentBg = document.body.style.backgroundColor;
+        if (currentBg) {
+            if (currentBg.startsWith('rgb')) {
+                const rgb = currentBg.match(/\d+/g);
+                if (rgb && rgb.length >= 3) {
+                    const hex = "#" + rgb.slice(0,3).map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
+                    colorInput.value = hex;
+                    hexDisplay.textContent = hex;
+                }
+            } else if (currentBg.startsWith('#')) {
+                colorInput.value = currentBg;
+                hexDisplay.textContent = currentBg;
+            }
+        }
+    }
+
+    function hideModal() {
+        modal.classList.add('opacity-0');
+        modal.querySelector('div').classList.add('scale-95');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 300);
+    }
+
+    // カラーピッカーの入力イベント
+    colorInput.addEventListener('input', (e) => {
+        hexDisplay.textContent = e.target.value;
+    });
+
+    // プリセットボタンのクリックイベント
+    presetBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const color = e.target.dataset.color;
+            if (color) {
+                colorInput.value = color;
+                hexDisplay.textContent = color;
+            }
+        });
+    });
+
+    // キャンセル・保存ボタンのイベント
+    btnCancel.addEventListener('click', hideModal);
+
+    btnSave.addEventListener('click', () => {
+        const newColor = colorInput.value;
+        db.collection('pageSettings').doc('renkei').set(
+            { backgroundColor: newColor }, 
+            { merge: true }
+        ).then(() => {
+            hideModal();
+        }).catch(err => {
+            console.error('Error saving background color: ', err);
+            hideModal();
+        });
+    });
+}
