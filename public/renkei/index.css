@@ -57,7 +57,13 @@
 
 #company-grid .cosmic-card {
     animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    background: rgba(15, 20, 35, 0.6);
+    background: color-mix(in srgb, var(--card-bg, #0f1423), transparent 40%);
+    backdrop-filter: blur(8px);
+}
+
+#company-grid .cosmic-card .company-name {
+    color: var(--card-text, #e2e8f0);
+    transition: color 0.3s ease;
 }
 
 /* ビューポートに合わせてグリッドの高さを調整 */

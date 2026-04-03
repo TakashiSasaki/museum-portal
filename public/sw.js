@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v20'; // Multi-field customizer and tab styles
+const CORE_CACHE_VERSION = 'v21'; // Card styles and transparency (Plan A)
 const API_CACHE_VERSION = 'v2';
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;

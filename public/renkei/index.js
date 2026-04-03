@@ -142,15 +142,15 @@ function renderApp(db, docRef) {
 
                 <div class="flex-1 grid grid-cols-3 md:grid-cols-5 gap-1 sm:gap-3 overflow-y-auto no-scrollbar pb-4" id="company-grid">
                     ${category.companies.map(company => `
-                        <div class="cosmic-card p-1 sm:p-2 flex flex-col items-center justify-center text-center group min-h-0">
+                        <div class="cosmic-card p-1 sm:p-2 flex flex-col items-center justify-center text-center group min-h-0" data-customizable="true">
                             <!-- Logo container: allowed to shrink -->
-                            <div class="w-full flex-shrink min-h-0 flex items-center justify-center p-0.5 sm:p-1 mb-1 sm:mb-2">
+                            <div class="w-full flex-shrink min-h-0 flex items-center justify-center p-0.5 sm:p-1 mb-1 sm:mb-2 pointer-events-none">
                                 <div class="w-full aspect-[16/10]">
                                     ${createDummyLogo(company)}
                                 </div>
                             </div>
                             <!-- Company Name: prioritize displaying full text -->
-                            <span class="flex-shrink-0 text-[8px] sm:text-[11px] font-medium text-slate-200 leading-tight tracking-wide group-hover:text-cyan-300 transition-colors break-words overflow-hidden" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
+                            <span class="company-name flex-shrink-0 text-[8px] sm:text-[11px] font-medium leading-tight tracking-wide group-hover:text-cyan-300 transition-colors break-words overflow-hidden pointer-events-none" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
                                 ${company}
                             </span>
                         </div>
@@ -309,7 +309,10 @@ document.addEventListener('DOMContentLoaded', () => {
             { id: 'tabActiveTextColor', apply: (v) => document.documentElement.style.setProperty('--tab-active-text', v) },
             { id: 'tabActiveBgColor', apply: (v) => document.documentElement.style.setProperty('--tab-active-bg', v) },
             { id: 'tabInactiveTextColor', apply: (v) => document.documentElement.style.setProperty('--tab-inactive-text', v) },
-            { id: 'tabInactiveBgColor', apply: (v) => document.documentElement.style.setProperty('--tab-inactive-bg', v) }
+            { id: 'tabInactiveBgColor', apply: (v) => document.documentElement.style.setProperty('--tab-inactive-bg', v) },
+            // カード用（CSS Variables / 案A: 自動透明度）
+            { id: 'cardTextColor', apply: (v) => document.documentElement.style.setProperty('--card-text', v) },
+            { id: 'cardBgColor', apply: (v) => document.documentElement.style.setProperty('--card-bg', v) }
         ];
 
         docRef.onSnapshot((doc) => {
@@ -335,11 +338,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             ],
             presetBtnSelector: '.preset-color-btn',
-            excludeSelector: 'button, a, [data-customizable="true"], [data-customizable="true"] *, #color-picker-modal, #text-color-picker-modal, #cat-title-color-picker-modal, #cat-desc-color-picker-modal, #active-tab-style-modal, #inactive-tab-style-modal',
+            excludeSelector: 'button, a, [data-customizable="true"], [data-customizable="true"] *, #color-picker-modal, #text-color-picker-modal, #cat-title-color-picker-modal, #cat-desc-color-picker-modal, #active-tab-style-modal, #inactive-tab-style-modal, #card-style-modal',
             cancelId: 'color-picker-cancel',
             saveId: 'color-picker-save',
             docRef
         });
+
+        // 企業カードのカスタマイザー設定（Event Delegation）
+        const companyGrid = document.getElementById('company-grid');
+        if (companyGrid) {
+            registerMultiColorCustomizer({
+                triggerElement: companyGrid,
+                modalId: 'card-style-modal',
+                fields: [
+                    {
+                        firestoreField: 'cardTextColor',
+                        inputId: 'card-text-input',
+                        hexId: 'card-text-hex',
+                        getCurrentValue: () => getComputedStyle(document.documentElement).getPropertyValue('--card-text').trim()
+                    },
+                    {
+                        firestoreField: 'cardBgColor',
+                        inputId: 'card-bg-input',
+                        hexId: 'card-bg-hex',
+                        getCurrentValue: () => getComputedStyle(document.documentElement).getPropertyValue('--card-bg').trim()
+                    }
+                ],
+                cancelId: 'card-style-cancel',
+                saveId: 'card-style-save',
+                docRef
+            });
+        }
 
         // タイトル色のカスタマイザー設定
         const title = document.getElementById('page-title');
