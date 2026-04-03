@@ -344,11 +344,12 @@ document.addEventListener('DOMContentLoaded', () => {
             docRef
         });
 
-        // 企業カードのカスタマイザー設定（Event Delegation）
-        const companyGrid = document.getElementById('company-grid');
-        if (companyGrid) {
+        // 企業カードのカスタマイザー設定（Event Delegation on Static Parent）
+        const tabContent = document.getElementById('tab-content');
+        if (tabContent) {
             registerMultiColorCustomizer({
-                triggerElement: companyGrid,
+                triggerElement: tabContent,
+                targetSelector: '.cosmic-card',
                 modalId: 'card-style-modal',
                 fields: [
                     {
@@ -403,6 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 function registerMultiColorCustomizer({
     triggerElement,
+    targetSelector, // 追加：実際に反応すべき指定要素（指定がなければ triggerElement 全体）
     modalId,
     fields, // 配列: [{ firestoreField, inputId, hexId, getCurrentValue }]
     presetBtnSelector,
@@ -429,6 +431,10 @@ function registerMultiColorCustomizer({
     const pressDuration = 2000;
 
     const startPress = (e) => {
+        // targetSelector が指定されている場合、ターゲットがその要素内にないなら無視
+        if (targetSelector && !e.target.closest(targetSelector)) return;
+        
+        // 除外セレクタのチェック
         if (excludeSelector && e.target.closest(excludeSelector)) return;
         
         if (triggerElement !== document.body) {
