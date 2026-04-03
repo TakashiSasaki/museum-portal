@@ -105,6 +105,8 @@ function createDummyLogo(name) {
     `;
 }
 
+let currentSettings = {}; // Firestore から取得した最新の設定を保持するグローバルステート
+
 /**
  * UI の描画
  */
@@ -130,10 +132,10 @@ function renderApp(db, docRef) {
         contentArea.innerHTML = `
             <div class="flex flex-col h-full">
                 <div class="mb-2 sm:mb-4 px-2">
-                    <h2 id="category-title" class="text-base sm:text-xl font-bold text-cyan-300 border-l-4 border-[#b1a348] pl-3 drop-shadow-glow transition-colors duration-300">
+                    <h2 id="category-title" data-customizable="true" class="text-base sm:text-xl font-bold text-cyan-300 border-l-4 border-[#b1a348] pl-3 drop-shadow-glow transition-colors duration-300">
                         ${category.name}
                     </h2>
-                    <p id="category-description" class="text-[10px] sm:text-sm text-slate-400 mt-1 ml-4 opacity-80 transition-colors duration-300">
+                    <p id="category-description" data-customizable="true" class="text-[10px] sm:text-sm text-slate-400 mt-1 ml-4 opacity-80 transition-colors duration-300">
                         ${category.description}
                     </p>
                 </div>
@@ -157,10 +159,18 @@ function renderApp(db, docRef) {
             </div>
         `;
 
-        // 動的に生成された要素にカスタマイザーを登録
-        // 注意: onSnapshot は DOMContentLoaded で一度だけ設定するため、ここではトリガーのみ登録
+        // 描画直後に現在の設定を適用（永続性の確保）
+        const catTitle = document.getElementById('category-title');
+        const catDesc = document.getElementById('category-description');
+        if (currentSettings.categoryTitleColor && catTitle) {
+            catTitle.style.color = currentSettings.categoryTitleColor;
+        }
+        if (currentSettings.categoryDescriptionColor && catDesc) {
+            catDesc.style.color = currentSettings.categoryDescriptionColor;
+        }
+
+        // 動的に生成された要素にカスタマイザーを登録（トリガーのみ）
         if (db && docRef) {
-            const catTitle = document.getElementById('category-title');
             if (catTitle) {
                 registerColorCustomizer({
                     triggerElement: catTitle,
@@ -178,7 +188,6 @@ function renderApp(db, docRef) {
                 });
             }
 
-            const catDesc = document.getElementById('category-description');
             if (catDesc) {
                 registerColorCustomizer({
                     triggerElement: catDesc,
@@ -224,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
         db = firebase.firestore();
         docRef = db.collection('pageSettings').doc('renkei');
 
-        // 各フィールドの onSnapshot はここで一度だけ登録する
+        // Firestore同期設定（一度だけ登録）
         const fields = [
             { id: 'backgroundColor', apply: (v) => document.body.style.backgroundColor = v },
             { id: 'titleColor', apply: (v) => {
@@ -244,6 +253,9 @@ document.addEventListener('DOMContentLoaded', () => {
         docRef.onSnapshot((doc) => {
             if (doc.exists) {
                 const data = doc.data();
+                // グローバルステートに保存
+                currentSettings = { ...currentSettings, ...data };
+                // 現在表示されている要素に適用
                 fields.forEach(field => {
                     if (data[field.id]) field.apply(data[field.id]);
                 });
@@ -257,7 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
             firestoreField: 'backgroundColor',
             presetBtnSelector: '.preset-color-btn',
             getCurrentValue: () => document.body.style.backgroundColor || window.getComputedStyle(document.body).backgroundColor,
-            excludeSelector: 'button, a, #color-picker-modal, #text-color-picker-modal, #page-title, #cat-title-color-picker-modal, #cat-desc-color-picker-modal, #category-title, #category-description',
+            // Customizable 属性を持つ要素を確実に除外
+            excludeSelector: 'button, a, [data-customizable="true"], #color-picker-modal, #text-color-picker-modal, #cat-title-color-picker-modal, #cat-desc-color-picker-modal',
             modalConfig: {
                 inputId: 'bg-color-input',
                 hexId: 'bg-color-hex',
@@ -321,10 +334,10 @@ function registerColorCustomizer({
     const pressDuration = 2000;
 
     const startPress = (e) => {
-        // 除外セレクタに一致する場合はスキップ
+        // 重要: 除外セレクタに一致する場合はこのリスナーでの処理を完全にスキップ
         if (excludeSelector && e.target.closest(excludeSelector)) return;
         
-        // イベントの伝播を止めて親要素（bodyなど）の長押し検知を防ぐ
+        // 特定要素（body以外）の場合、イベント伝播を止めて親（body）のリスナー起動を防ぐ
         if (triggerElement !== document.body) {
             e.stopPropagation();
         }
@@ -347,6 +360,7 @@ function registerColorCustomizer({
     triggerElement.addEventListener('mouseleave', cancelPress);
     triggerElement.addEventListener('mousemove', cancelPress);
 
+    // touchstart は stopPropagation を効かせるため passive: false に
     triggerElement.addEventListener('touchstart', startPress, { passive: false });
     triggerElement.addEventListener('touchend', cancelPress);
     triggerElement.addEventListener('touchcancel', cancelPress);
