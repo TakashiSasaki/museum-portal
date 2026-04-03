@@ -42,8 +42,8 @@
 
 
 
-        <h1
-            class="text-lg sm:text-2xl font-bold tracking-normal sm:tracking-[0.1em] whitespace-nowrap text-slate-900 drop-shadow-[0_0_10px_rgba(0,0,0,0.1)]">
+        <h1 id="page-title"
+            class="text-lg sm:text-2xl font-bold tracking-normal sm:tracking-[0.1em] whitespace-nowrap text-slate-900 drop-shadow-[0_0_10px_rgba(0,0,0,0.1)] transition-colors duration-300">
             愛媛大学研究協力会の紹介
         </h1>
     </header>
@@ -105,7 +105,39 @@
         </div>
     </div>
 
-    <!-- Page Logic -->
+    <!-- Text Color Picker Modal -->
+    <div id="text-color-picker-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-900 border border-slate-700/50 rounded-2xl p-6 shadow-2xl w-11/12 max-w-sm transform scale-95 transition-transform duration-300 text-slate-200">
+            <h3 class="text-lg font-bold mb-4 text-cyan-300 drop-shadow-glow flex items-center gap-2">
+                <i data-lucide="type" class="w-5 h-5"></i>
+                テキスト色の設定
+            </h3>
+            
+            <div class="mb-4">
+                <label for="text-color-input" class="block text-xs text-slate-400 mb-2">カスタムカラーを選択</label>
+                <div class="flex items-center gap-3">
+                    <input type="color" id="text-color-input" class="w-12 h-12 rounded cursor-pointer border-0 bg-transparent p-0" value="#1e293b">
+                    <span id="text-color-hex" class="text-sm font-mono bg-slate-800 px-3 py-1 rounded w-full border border-slate-700">#1e293b</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs text-slate-400 mb-2">プリセット</label>
+                <div class="flex flex-wrap gap-2">
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#1e293b] preset-text-color-btn" data-color="#1e293b" aria-label="Slate Dark"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#f8fafc] preset-text-color-btn" data-color="#f8fafc" aria-label="Slate Light"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#67e8f9] preset-text-color-btn" data-color="#67e8f9" aria-label="Cyan"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#fb7185] preset-text-color-btn" data-color="#fb7185" aria-label="Rose"></button>
+                    <button class="w-8 h-8 rounded-full border border-slate-600 bg-[#b1a348] preset-text-color-btn" data-color="#b1a348" aria-label="Gold"></button>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button id="text-color-picker-cancel" class="px-4 py-2 rounded text-sm text-slate-400 hover:text-white transition-colors">キャンセル</button>
+                <button id="text-color-picker-save" class="px-4 py-2 rounded text-sm bg-cyan-600 hover:bg-cyan-500 text-white font-medium transition-colors shadow-lg shadow-cyan-900/50">保存</button>
+            </div>
+        </div>
+    </div>
     <script src="index.js" defer></script>
 </body>
 

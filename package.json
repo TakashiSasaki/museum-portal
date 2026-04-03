@@ -4,7 +4,9 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "firebase": "^12.11.0",
+    "firebase-admin": "^13.7.0"
   },
   "peerDependencies": {
     "typescript": "^5"
