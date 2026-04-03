@@ -158,44 +158,41 @@ function renderApp(db, docRef) {
         `;
 
         // 動的に生成された要素にカスタマイザーを登録
+        // 注意: onSnapshot は DOMContentLoaded で一度だけ設定するため、ここではトリガーのみ登録
         if (db && docRef) {
             const catTitle = document.getElementById('category-title');
             if (catTitle) {
                 registerColorCustomizer({
-                    db,
-                    docRef,
                     triggerElement: catTitle,
                     modalId: 'cat-title-color-picker-modal',
                     firestoreField: 'categoryTitleColor',
                     presetBtnSelector: '.preset-cat-title-color-btn',
-                    applyValue: (val) => catTitle.style.color = val,
                     getCurrentValue: () => catTitle.style.color || window.getComputedStyle(catTitle).color,
                     modalConfig: {
                         inputId: 'cat-title-color-input',
                         hexId: 'cat-title-color-hex',
                         cancelId: 'cat-title-color-picker-cancel',
                         saveId: 'cat-title-color-picker-save'
-                    }
+                    },
+                    docRef
                 });
             }
 
             const catDesc = document.getElementById('category-description');
             if (catDesc) {
                 registerColorCustomizer({
-                    db,
-                    docRef,
                     triggerElement: catDesc,
                     modalId: 'cat-desc-color-picker-modal',
                     firestoreField: 'categoryDescriptionColor',
                     presetBtnSelector: '.preset-cat-desc-color-btn',
-                    applyValue: (val) => catDesc.style.color = val,
                     getCurrentValue: () => catDesc.style.color || window.getComputedStyle(catDesc).color,
                     modalConfig: {
                         inputId: 'cat-desc-color-input',
                         hexId: 'cat-desc-color-hex',
                         cancelId: 'cat-desc-color-picker-cancel',
                         saveId: 'cat-desc-color-picker-save'
-                    }
+                    },
+                    docRef
                 });
             }
         }
@@ -227,15 +224,38 @@ document.addEventListener('DOMContentLoaded', () => {
         db = firebase.firestore();
         docRef = db.collection('pageSettings').doc('renkei');
 
+        // 各フィールドの onSnapshot はここで一度だけ登録する
+        const fields = [
+            { id: 'backgroundColor', apply: (v) => document.body.style.backgroundColor = v },
+            { id: 'titleColor', apply: (v) => {
+                const el = document.getElementById('page-title');
+                if (el) el.style.color = v;
+            }},
+            { id: 'categoryTitleColor', apply: (v) => {
+                const el = document.getElementById('category-title');
+                if (el) el.style.color = v;
+            }},
+            { id: 'categoryDescriptionColor', apply: (v) => {
+                const el = document.getElementById('category-description');
+                if (el) el.style.color = v;
+            }}
+        ];
+
+        docRef.onSnapshot((doc) => {
+            if (doc.exists) {
+                const data = doc.data();
+                fields.forEach(field => {
+                    if (data[field.id]) field.apply(data[field.id]);
+                });
+            }
+        });
+
         // 背景色のカスタマイザー設定
         registerColorCustomizer({
-            db,
-            docRef,
             triggerElement: document.body,
             modalId: 'color-picker-modal',
             firestoreField: 'backgroundColor',
             presetBtnSelector: '.preset-color-btn',
-            applyValue: (val) => document.body.style.backgroundColor = val,
             getCurrentValue: () => document.body.style.backgroundColor || window.getComputedStyle(document.body).backgroundColor,
             excludeSelector: 'button, a, #color-picker-modal, #text-color-picker-modal, #page-title, #cat-title-color-picker-modal, #cat-desc-color-picker-modal, #category-title, #category-description',
             modalConfig: {
@@ -243,27 +263,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 hexId: 'bg-color-hex',
                 cancelId: 'color-picker-cancel',
                 saveId: 'color-picker-save'
-            }
+            },
+            docRef
         });
 
         // タイトル色のカスタマイザー設定
         const title = document.getElementById('page-title');
         if (title) {
             registerColorCustomizer({
-                db,
-                docRef,
                 triggerElement: title,
                 modalId: 'text-color-picker-modal',
                 firestoreField: 'titleColor',
                 presetBtnSelector: '.preset-text-color-btn',
-                applyValue: (val) => title.style.color = val,
                 getCurrentValue: () => title.style.color || window.getComputedStyle(title).color,
                 modalConfig: {
                     inputId: 'text-color-input',
                     hexId: 'text-color-hex',
                     cancelId: 'text-color-picker-cancel',
                     saveId: 'text-color-picker-save'
-                }
+                },
+                docRef
             });
         }
     }
@@ -278,24 +297,15 @@ document.addEventListener('DOMContentLoaded', () => {
  * カラーカスタマイザーの登録（共通ロジック）
  */
 function registerColorCustomizer({
-    db,
-    docRef,
     triggerElement,
     modalId,
     firestoreField,
-    applyValue,
     getCurrentValue,
     presetBtnSelector,
     excludeSelector,
-    modalConfig
+    modalConfig,
+    docRef
 }) {
-    // 1. Firestore同期 (リアルタイム反映)
-    docRef.onSnapshot((doc) => {
-        if (doc.exists && doc.data()[firestoreField]) {
-            applyValue(doc.data()[firestoreField]);
-        }
-    });
-
     // 2. DOM要素の取得
     const modal = document.getElementById(modalId);
     if (!modal) return;
@@ -314,12 +324,20 @@ function registerColorCustomizer({
         // 除外セレクタに一致する場合はスキップ
         if (excludeSelector && e.target.closest(excludeSelector)) return;
         
+        // イベントの伝播を止めて親要素（bodyなど）の長押し検知を防ぐ
+        if (triggerElement !== document.body) {
+            e.stopPropagation();
+        }
+        
         longPressTimer = setTimeout(() => {
             showModal();
         }, pressDuration);
     };
 
-    const cancelPress = () => {
+    const cancelPress = (e) => {
+        if (triggerElement !== document.body) {
+            e.stopPropagation();
+        }
         clearTimeout(longPressTimer);
     };
 
@@ -329,7 +347,7 @@ function registerColorCustomizer({
     triggerElement.addEventListener('mouseleave', cancelPress);
     triggerElement.addEventListener('mousemove', cancelPress);
 
-    triggerElement.addEventListener('touchstart', startPress, { passive: true });
+    triggerElement.addEventListener('touchstart', startPress, { passive: false });
     triggerElement.addEventListener('touchend', cancelPress);
     triggerElement.addEventListener('touchcancel', cancelPress);
     triggerElement.addEventListener('touchmove', cancelPress);

@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v16'; // Added dynamic category text color support
+const CORE_CACHE_VERSION = 'v17'; // Conflict resolution and listener optimization
 const API_CACHE_VERSION = 'v2';
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
