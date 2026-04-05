@@ -17,4 +17,4 @@ To deploy the website and firestore rules/indexes:
 Note: This will deploy the content from the `public/` directory to the project `museum-6f112`.
 After deployment, verify the results at:
 - https://museum-6f112.web.app
-- https://museum-portal.moukaeritai.work
+- https://portal.museum.ehime-u.ac.jp/

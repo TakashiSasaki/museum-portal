@@ -8,7 +8,7 @@
 - GitHub Actions を使用して、`museum-portal` ブランチへのプッシュ時に自動的に Firebase Hosting へデプロイされます。
 - デプロイには `FIREBASE_TOKEN` シークレットが必要です。
 - ローカルからの手動デプロイには `bun x firebase deploy` を使用してください。
-- カノニカルドメインは `https://museum-portal.moukaeritai.work` です。
+- カノニカルドメインは `https://portal.museum.ehime-u.ac.jp/` です。
 - Firebaseのデプロイ時の認証は、当面の間はサービスアカウントキーへの移行は行わず、トークンベースの認証(`FIREBASE_TOKEN`)を継続して使用します。
 
 ## Design Principles
