@@ -180,13 +180,17 @@
                 if (!querySnapshot.empty) {
                     renderIcons(querySnapshot);
                 }
-            }).catch((error) => {});
+            }).catch((error) => {
+                console.warn('[DEBUG] Failed to fetch museum icons from cache', error);
+            });
 
             db.collection("museumIcons").get({ source: 'server' }).then((querySnapshot) => {
                 if (!querySnapshot.empty) {
                     renderIcons(querySnapshot);
                 }
-            }).catch((error) => {});
+            }).catch((error) => {
+                console.warn('[DEBUG] Failed to fetch museum icons from server', error);
+            });
 
             function renderIcons(querySnapshot) {
                 const defaultColors = {

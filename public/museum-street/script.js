@@ -163,7 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (contentFrame.contentDocument && contentFrame.contentDocument.body) {
                 contentFrame.contentDocument.body.style.padding = '0';
             }
-        } catch (e) {}
+        } catch (e) {
+            console.warn('[DEBUG] Could not set padding for content iframe', e);
+        }
     });
 
     navContainer.addEventListener('click', (e) => {
