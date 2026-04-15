@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultPage = '1';
     let currentPage = defaultPage;
     let currentTab = 'events';
+    let activeLink = null;
 
     // Menu toggle logic
     const closeMenu = () => {
@@ -175,10 +176,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentPage !== page) {
                 currentPage = page;
                 
-                document.querySelectorAll('.museum-item').forEach(item => {
-                    item.classList.remove('active');
-                });
+                if (activeLink) {
+                    activeLink.classList.remove('active');
+                }
                 link.classList.add('active');
+                activeLink = link;
 
                 loadEventsContent(currentPage);
                 if (currentTab === 'map') {
@@ -196,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const initialLink = navContainer.querySelector(`[data-page="${defaultPage}"]`);
     if (initialLink) {
         initialLink.classList.add('active');
+        activeLink = initialLink;
         loadEventsContent(defaultPage);
         if (currentTab === 'map') {
             loadMapContent(defaultPage);
