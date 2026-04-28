@@ -33,7 +33,52 @@
             document.getElementById('clock-h').textContent = hours;
             document.getElementById('clock-m').textContent = minutes;
             document.getElementById('clock-s').textContent = seconds;
+
+            updateEventAlert(now, year, month, date);
         }
+
+        function updateEventAlert(now, year, month, date) {
+            const alertEl = document.getElementById('upcoming-event-alert');
+            if (!alertEl || typeof allNotices === 'undefined') return;
+
+            const todayStr = `${year}.${String(month).padStart(2, '0')}.${String(date).padStart(2, '0')}`;
+            const todayEvents = allNotices.filter(n => n.date === todayStr && n.startTime);
+
+            let activeAlert = null;
+
+            for (const event of todayEvents) {
+                const [startH, startM] = event.startTime.split(':').map(Number);
+                const startDateTime = new Date(year, month - 1, date, startH, startM, 0);
+                
+                // 開始時刻の5分前
+                const alertStartTime = new Date(startDateTime.getTime() - 5 * 60 * 1000);
+                
+                let alertEndTime;
+                if (event.exclusive && event.endTime) {
+                    const [endH, endM] = event.endTime.split(':').map(Number);
+                    alertEndTime = new Date(year, month - 1, date, endH, endM, 0);
+                } else {
+                    alertEndTime = startDateTime; // 通常イベントは開始時刻に非表示
+                }
+
+                if (now >= alertStartTime && now < alertEndTime) {
+                    activeAlert = event;
+                    break; // 該当するイベントが複数ある場合は直近のものを優先
+                }
+            }
+
+            if (activeAlert) {
+                if (activeAlert.exclusive) {
+                    alertEl.textContent = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。${activeAlert.endTime} まではイベント参加者のみご利用いただけます。`;
+                } else {
+                    alertEl.textContent = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。`;
+                }
+                alertEl.style.display = 'block';
+            } else {
+                alertEl.style.display = 'none';
+            }
+        }
+
         setInterval(updateClock, 1000);
         updateClock();
 
