@@ -45,8 +45,8 @@
            タイトル表示
            ========================================= */
         .title-frame {
-            background-color: #004d40;
-            /* 愛媛大学のスクールカラーに合わせた深めのグリーンを仮設定 */
+            background-color: #822280;
+            /* 愛媛大学のスクールカラー */
             color: #ffffff;
             text-align: center;
             padding: 3cqw 0;
@@ -572,7 +572,7 @@
         }
 
         .notice-title {
-            font-size: 5cqw;
+            font-size: 2.5cqw;
             margin: 0;
             color: #1a1a1a;
         }

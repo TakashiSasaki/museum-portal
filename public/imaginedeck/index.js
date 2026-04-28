@@ -1,3 +1,5 @@
+        let allNotices = []; // イベントリストをグローバルに保持（初期化エラー回避のため先頭に移動）
+
         /* =========================================
            1. 上フレームの処理（時計・ストップウォッチ・タイマー）
            ========================================= */
@@ -320,7 +322,6 @@
         let today = new Date();
         let currentYear = today.getFullYear();
         let currentMonth = today.getMonth();
-        let allNotices = []; // 初期化エラーを回避するため、変数宣言をカレンダー描画前に移動しました
 
         function renderCalendar(year, month) {
             const firstDay = new Date(year, month, 1).getDay();
