@@ -425,10 +425,13 @@
             d.setDate(d.getDate() + (i - 10)); // カレンダー上に散らばるように今日を中心に前後へずらす
             
             // 時刻の生成 (9:00〜17:00の間で1分単位)
-            const startH = String(9 + (i % 8)).padStart(2, '0');
-            const startM = String((i * 7) % 60).padStart(2, '0');
-            const endH = String(parseInt(startH) + 1 + (i % 3)).padStart(2, '0');
-            const endM = String((i * 13) % 60).padStart(2, '0');
+            const startH = String(9 + (i % 8)).padStart(2, '00');
+            const startM = String((i * 7) % 60).padStart(2, '00');
+            const endH = String(parseInt(startH) + 1 + (i % 3)).padStart(2, '00');
+            const endM = String((i * 13) % 60).padStart(2, '00');
+
+            // 排他フラグ：奇数番インデックスのイベントを「貸切」に設定
+            const exclusive = (i % 3 === 0) ? 'true' : 'false';
 
             return `
                 <item>
@@ -436,6 +439,7 @@
                     <pubDate>${d.toUTCString()}</pubDate>
                     <startTime>${startH}:${startM}</startTime>
                     <endTime>${endH}:${endM}</endTime>
+                    <exclusive>${exclusive}</exclusive>
             </item>`;
         }).join('')}
         </channel>
@@ -487,12 +491,14 @@
                 const pubDateStr = item.querySelector('pubDate').textContent;
                 const startTime = item.querySelector('startTime') ? item.querySelector('startTime').textContent : '';
                 const endTime = item.querySelector('endTime') ? item.querySelector('endTime').textContent : '';
+                const exclusiveEl = item.querySelector('exclusive');
+                const exclusive = exclusiveEl ? exclusiveEl.textContent === 'true' : false;
 
                 // 日付のフォーマット
                 const d = new Date(pubDateStr);
                 const formattedDate = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 
-                allNotices.push({ title: title, date: formattedDate, startTime: startTime, endTime: endTime });
+                allNotices.push({ title: title, date: formattedDate, startTime: startTime, endTime: endTime, exclusive: exclusive });
             });
 
             // 表示件数を計算
@@ -526,8 +532,9 @@
             pageItems.forEach(item => {
                 const li = document.createElement('li');
                 const timeStr = (item.startTime && item.endTime) ? ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">${item.startTime}〜${item.endTime}</span>` : '';
+                const badgeStr = item.exclusive ? `<span class="notice-badge exclusive">🔒 貸切</span>` : '';
                 li.innerHTML = `
-                    <span class="notice-date">${item.date}${timeStr}</span>
+                    <span class="notice-date">${item.date}${timeStr}${badgeStr}</span>
                     <span class="notice-text">${item.title}</span>
                 `;
                 listElement.appendChild(li);

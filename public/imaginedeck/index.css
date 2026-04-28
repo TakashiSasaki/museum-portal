@@ -236,8 +236,8 @@
         }
 
         .clock-date {
-            font-size: 3.15cqw;
-            /* 高さに合わせて縮小 */
+            font-size: 4cqw;
+            /* 高さに合わせて調整 */
             margin-bottom: 1.5cqw;
             letter-spacing: 0.5cqw;
         }
@@ -250,8 +250,8 @@
         }
 
         .time-num {
-            font-size: 11.2cqw;
-            /* 高さに合わせて縮小 */
+            font-size: 14cqw;
+            /* 高さに合わせて調整 */
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold;
             line-height: 1;
@@ -259,8 +259,8 @@
         }
 
         .time-unit {
-            font-size: 2.5cqw;
-            /* 高さに合わせて縮小 */
+            font-size: 3cqw;
+            /* 高さに合わせて調整 */
             font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
             color: #aaa;
             margin-left: 0.5cqw;
@@ -399,8 +399,8 @@
         }
 
         .time-display-val {
-            font-size: 11.2cqw;
-            /* 数字を少し縮小 */
+            font-size: 14cqw;
+            /* 数字を少し調整 */
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold;
             line-height: 1;
@@ -626,6 +626,23 @@
             color: #777;
             margin-bottom: 0.2cqw;
             /* 余白を少し詰める */
+            display: flex;
+            align-items: center;
+            gap: 1cqw;
+            flex-wrap: wrap;
+        }
+
+        .notice-badge.exclusive {
+            display: inline-block;
+            font-size: 1.6cqw;
+            padding: 0.15cqw 0.7cqw;
+            border-radius: 4px;
+            background-color: #e67e22;
+            color: #fff;
+            font-weight: bold;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+            vertical-align: middle;
         }
 
         .notice-list .notice-text {
