@@ -47,7 +47,7 @@
 
             // テスト表示モード
             if (now.getTime() < forceAlertUntil) {
-                alertEl.textContent = `[テスト表示] まもなく 12:00 より『テストイベント』が始まります。13:00 まではイベント参加者のみご利用いただけます。`;
+                alertEl.innerHTML = `[テスト表示] まもなく 12:00 より『テストイベント』が始まります。<br>13:00 まではイベント参加者のみご利用いただけます。`;
                 alertEl.style.display = 'block';
                 return;
             }
@@ -80,9 +80,9 @@
 
             if (activeAlert) {
                 if (activeAlert.exclusive) {
-                    alertEl.textContent = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。${activeAlert.endTime} まではイベント参加者のみご利用いただけます。`;
+                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。<br>${activeAlert.endTime} まではイベント参加者のみご利用いただけます。`;
                 } else {
-                    alertEl.textContent = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。`;
+                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。`;
                 }
                 alertEl.style.display = 'block';
             } else {
