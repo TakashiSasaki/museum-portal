@@ -536,15 +536,47 @@
         }
 
         /* =========================================
-           下フレーム：お知らせ ＋ 右端QRコード
+           下フレーム：お知らせ
            ========================================= */
         .bottom-frame {
             flex: 1;
             /* 余裕を持たせる */
-            flex-direction: row;
-            /* 横並び */
             background-color: #ffffff;
         }
+
+        /* フッターフレーム：QRコード（横置き） */
+        .footer-frame {
+            flex: 0.2; /* 高さを抑える */
+            background-color: #f1f3f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-top: 2px solid #ccc;
+            padding: 1cqw 0;
+        }
+
+        .qr-wrapper-horizontal {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 4cqw;
+            height: 100%;
+        }
+
+        .qr-wrapper-horizontal img {
+            height: 100%;
+            max-height: 10cqw;
+            object-fit: contain;
+        }
+
+        .qr-text {
+            font-size: 2.8cqw;
+            color: #333;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
 
         /* お知らせエリア */
         .notice-wrapper {
@@ -658,41 +690,7 @@
             overflow: hidden;
         }
 
-        /* QRコードエリア */
-        .qr-wrapper {
-            width: 25%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            border-left: 2px solid #ccc;
-            padding: 3cqw;
-            box-sizing: border-box;
-            background-color: #f9f9f9;
-        }
 
-        .qr-wrapper img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-        }
-
-        .qr-text-top,
-        .qr-text-bottom {
-            font-size: 2cqw;
-            color: #333;
-            text-align: center;
-            font-weight: bold;
-            white-space: nowrap;
-        }
-
-        .qr-text-top {
-            margin-bottom: 2cqw;
-        }
-
-        .qr-text-bottom {
-            margin-top: 2cqw;
-        }
 
         /* イベント開始前アラート */
         .upcoming-event-alert {
