@@ -5,10 +5,12 @@
 // --------------------------------------------------
 
 const CORE_CACHE_VERSION = 'v24'; // Event Delegation for dynamic cards
-const API_CACHE_VERSION = 'v2';
+const API_CACHE_VERSION = 'v3'; // TTL 24h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
 const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
+
+const API_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
 
@@ -141,7 +143,13 @@ async function handleApiRequest(request) {
   const cachedResponse = await cache.match(request);
 
   if (cachedResponse) {
-    return cachedResponse;
+    const dateHeader = cachedResponse.headers.get('Date');
+    const cachedAt = dateHeader ? new Date(dateHeader).getTime() : 0;
+    const isExpired = (Date.now() - cachedAt) > API_CACHE_MAX_AGE_MS;
+
+    if (!isExpired) {
+      return cachedResponse;
+    }
   }
 
   try {
@@ -153,6 +161,11 @@ async function handleApiRequest(request) {
 
     return networkResponse;
   } catch (error) {
+    // If network fails (offline), return the expired cache as a fallback if it exists
+    if (cachedResponse) {
+      console.log(`[ServiceWorker] Network failed for API. Returning expired cache.`);
+      return cachedResponse;
+    }
     return new Response('Content failed to load. Please check your connection.', {
       status: 503,
       statusText: 'Service Unavailable',
@@ -228,8 +241,15 @@ async function precacheApiContent() {
     const request = new Request(url);
 
     const cachedResponse = await cache.match(request);
-    if (!cachedResponse) {
-      console.log(`[ServiceWorker] Pre-caching API content for page ${i}`);
+    let isExpired = true;
+    if (cachedResponse) {
+      const dateHeader = cachedResponse.headers.get('Date');
+      const cachedAt = dateHeader ? new Date(dateHeader).getTime() : 0;
+      isExpired = (Date.now() - cachedAt) > API_CACHE_MAX_AGE_MS;
+    }
+
+    if (!cachedResponse || isExpired) {
+      console.log(`[ServiceWorker] Pre-caching API content for page ${i}${isExpired && cachedResponse ? ' (expired)' : ''}`);
       try {
         const networkResponse = await fetch(request);
         if (networkResponse && networkResponse.status === 200) {
