@@ -39,9 +39,18 @@
             updateEventAlert(now, year, month, date);
         }
 
+        let forceAlertUntil = 0; // テスト表示用の時刻保持
+
         function updateEventAlert(now, year, month, date) {
             const alertEl = document.getElementById('upcoming-event-alert');
             if (!alertEl || typeof allNotices === 'undefined') return;
+
+            // テスト表示モード
+            if (now.getTime() < forceAlertUntil) {
+                alertEl.textContent = `[テスト表示] まもなく 12:00 より『テストイベント』が始まります。13:00 まではイベント参加者のみご利用いただけます。`;
+                alertEl.style.display = 'block';
+                return;
+            }
 
             const todayStr = `${year}.${String(month).padStart(2, '0')}.${String(date).padStart(2, '0')}`;
             const todayEvents = allNotices.filter(n => n.date === todayStr && n.startTime);
@@ -83,6 +92,16 @@
 
         setInterval(updateClock, 1000);
         updateClock();
+
+        // --- テスト用：時計表示タップでアラートを10秒間表示 ---
+        const clockDisplayGroup = document.querySelector('#mode-clock .time-display-group');
+        if (clockDisplayGroup) {
+            clockDisplayGroup.style.cursor = 'pointer';
+            clockDisplayGroup.addEventListener('click', () => {
+                forceAlertUntil = Date.now() + 10000; // 10秒間
+                updateClock(); // 即座に反映
+            });
+        }
 
         // --- ストップウォッチ ---
         let swInterval;
