@@ -444,6 +444,7 @@
             padding: 2cqw;
             box-sizing: border-box;
             background-color: #fafafa;
+            display: none;
         }
 
         .calendar-header {
@@ -538,7 +539,7 @@
            下フレーム：お知らせ ＋ 右端QRコード
            ========================================= */
         .bottom-frame {
-            flex: 1.125;
+            flex: 1;
             /* 余裕を持たせる */
             flex-direction: row;
             /* 横並び */
@@ -608,7 +609,7 @@
         }
 
         .notice-list li {
-            flex: 1;
+            flex: none;
             /* 5件のアイテムで高さを均等に分割 */
             min-height: 0;
             /* 縮小を許可 */
@@ -617,6 +618,7 @@
             flex-direction: column;
             justify-content: center;
             /* 縦方向中央揃え */
+            padding: 1.5cqw 0;
         }
 
         .notice-list .notice-date {

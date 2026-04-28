@@ -442,8 +442,37 @@
         </rss>`;
 
         let currentNoticePage = 0;
-        const noticesPerPage = 5; // 1ページあたりの表示件数
+        let noticesPerPage = 5; // 1ページあたりの表示件数（動的に更新されます）
         let noticeAutoPlayInterval;
+
+        function calculateNoticesPerPage() {
+            const wrapper = document.querySelector('.notice-wrapper');
+            const header = document.querySelector('.notice-header');
+            const listElement = document.getElementById('notice-list');
+            
+            if (!wrapper || !header || !listElement) return 5;
+
+            // 仮の1件をレンダリングして高さを計測
+            const testLi = document.createElement('li');
+            testLi.innerHTML = `
+                <span class="notice-date">0000.00.00</span>
+                <span class="notice-text">テストテキスト</span>
+            `;
+            listElement.appendChild(testLi);
+            const itemHeight = testLi.getBoundingClientRect().height;
+            testLi.remove();
+
+            const availableHeight = wrapper.clientHeight - header.offsetHeight;
+            const calculated = Math.floor(availableHeight / itemHeight);
+            
+            noticesPerPage = calculated > 0 ? calculated : 5;
+            return noticesPerPage;
+        }
+
+        window.addEventListener('resize', () => {
+            calculateNoticesPerPage();
+            renderNoticePage(0);
+        });
 
         function parseFeed() {
             // XMLをパース
@@ -465,6 +494,9 @@
 
                 allNotices.push({ title: title, date: formattedDate, startTime: startTime, endTime: endTime });
             });
+
+            // 表示件数を計算
+            calculateNoticesPerPage();
 
             // 最初のページを表示して自動再生を開始
             renderNoticePage(0);
