@@ -517,6 +517,7 @@
             overflow: hidden;
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             /* 長い場合は2行で省略 */
             -webkit-box-orient: vertical;
         }
@@ -620,6 +621,7 @@
             font-weight: 500;
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             /* 2行以上になる場合は省略記号(...)を表示 */
             -webkit-box-orient: vertical;
             overflow: hidden;
