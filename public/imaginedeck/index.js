@@ -423,10 +423,19 @@
                 ${dummyEventTitles.map((title, i) => {
             const d = new Date();
             d.setDate(d.getDate() + (i - 10)); // カレンダー上に散らばるように今日を中心に前後へずらす
+            
+            // 時刻の生成 (9:00〜17:00の間で1分単位)
+            const startH = String(9 + (i % 8)).padStart(2, '0');
+            const startM = String((i * 7) % 60).padStart(2, '0');
+            const endH = String(parseInt(startH) + 1 + (i % 3)).padStart(2, '0');
+            const endM = String((i * 13) % 60).padStart(2, '0');
+
             return `
                 <item>
                     <title>${title}</title>
                     <pubDate>${d.toUTCString()}</pubDate>
+                    <startTime>${startH}:${startM}</startTime>
+                    <endTime>${endH}:${endM}</endTime>
             </item>`;
         }).join('')}
         </channel>
@@ -447,12 +456,14 @@
             items.forEach(item => {
                 const title = item.querySelector('title').textContent;
                 const pubDateStr = item.querySelector('pubDate').textContent;
+                const startTime = item.querySelector('startTime') ? item.querySelector('startTime').textContent : '';
+                const endTime = item.querySelector('endTime') ? item.querySelector('endTime').textContent : '';
 
                 // 日付のフォーマット
                 const d = new Date(pubDateStr);
                 const formattedDate = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 
-                allNotices.push({ title: title, date: formattedDate });
+                allNotices.push({ title: title, date: formattedDate, startTime: startTime, endTime: endTime });
             });
 
             // 最初のページを表示して自動再生を開始
@@ -482,8 +493,9 @@
 
             pageItems.forEach(item => {
                 const li = document.createElement('li');
+                const timeStr = (item.startTime && item.endTime) ? ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">${item.startTime}〜${item.endTime}</span>` : '';
                 li.innerHTML = `
-                    <span class="notice-date">${item.date}</span>
+                    <span class="notice-date">${item.date}${timeStr}</span>
                     <span class="notice-text">${item.title}</span>
                 `;
                 listElement.appendChild(li);
