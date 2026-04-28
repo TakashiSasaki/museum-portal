@@ -66,8 +66,8 @@
            上フレーム：時刻表示
            ========================================= */
         .top-frame {
-            flex: 0.75;
-            /* 高さを少し減らす */
+            flex: 0.525;
+            /* 高さを70%程度に縮小 */
             background-color: #1a1a1a;
             color: #ffffff;
             justify-content: center;
@@ -236,8 +236,8 @@
         }
 
         .clock-date {
-            font-size: 4.5cqw;
-            /* 高さに合わせて少し縮小 */
+            font-size: 3.15cqw;
+            /* 高さに合わせて縮小 */
             margin-bottom: 1.5cqw;
             letter-spacing: 0.5cqw;
         }
@@ -250,7 +250,7 @@
         }
 
         .time-num {
-            font-size: 16cqw;
+            font-size: 11.2cqw;
             /* 高さに合わせて縮小 */
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold;
@@ -259,7 +259,7 @@
         }
 
         .time-unit {
-            font-size: 3.5cqw;
+            font-size: 2.5cqw;
             /* 高さに合わせて縮小 */
             font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
             color: #aaa;
@@ -399,7 +399,7 @@
         }
 
         .time-display-val {
-            font-size: 16cqw;
+            font-size: 11.2cqw;
             /* 数字を少し縮小 */
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold;
