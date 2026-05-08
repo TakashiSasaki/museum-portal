@@ -5,12 +5,12 @@
 // --------------------------------------------------
 
 const CORE_CACHE_VERSION = 'v24'; // Event Delegation for dynamic cards
-const API_CACHE_VERSION = 'v3'; // TTL 24h
+const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
 const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
 
-const API_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const API_CACHE_MAX_AGE_MS = 20 * 60 * 60 * 1000; // 20 hours
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
 
@@ -257,6 +257,11 @@ async function precacheApiContent() {
         }
       } catch (e) {
         console.warn(`[ServiceWorker] Failed to pre-cache API content for page ${i}`, e);
+      }
+
+      // Wait for 1 second before fetching the next page to prevent overwhelming the server or causing issues on certain devices
+      if (i < 10) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
   }
