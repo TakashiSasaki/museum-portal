@@ -136,6 +136,22 @@ self.addEventListener('fetch', (evt) => {
 // --------------------------------------------------
 
 /**
+ * Creates a new Response object with a custom X-Cache-Fetched-At header.
+ */
+async function createResponseWithFetchTime(response) {
+  const headers = new Headers(response.headers);
+  headers.append('X-Cache-Fetched-At', Date.now().toString());
+
+  // We need to read the body as a Blob to create a new Response
+  const body = await response.blob();
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: headers
+  });
+}
+
+/**
  * Handles API requests (for iframe content) with a "Cache First" strategy.
  */
 async function handleApiRequest(request) {
@@ -143,8 +159,16 @@ async function handleApiRequest(request) {
   const cachedResponse = await cache.match(request);
 
   if (cachedResponse) {
+    const fetchedAtHeader = cachedResponse.headers.get('X-Cache-Fetched-At');
     const dateHeader = cachedResponse.headers.get('Date');
-    const cachedAt = dateHeader ? new Date(dateHeader).getTime() : 0;
+
+    let cachedAt = 0;
+    if (fetchedAtHeader) {
+      cachedAt = parseInt(fetchedAtHeader, 10);
+    } else if (dateHeader) {
+      cachedAt = new Date(dateHeader).getTime();
+    }
+
     const isExpired = (Date.now() - cachedAt) > API_CACHE_MAX_AGE_MS;
 
     if (!isExpired) {
@@ -156,7 +180,9 @@ async function handleApiRequest(request) {
     const networkResponse = await fetch(request);
 
     if (networkResponse && networkResponse.status === 200) {
-      await cache.put(request, networkResponse.clone());
+      // Create a cloned response with the custom fetch time header
+      const responseToCache = await createResponseWithFetchTime(networkResponse.clone());
+      await cache.put(request, responseToCache);
     }
 
     return networkResponse;
@@ -249,8 +275,16 @@ async function precacheApiContent() {
     const cachedResponse = await cache.match(request);
     let isExpired = true;
     if (cachedResponse) {
+      const fetchedAtHeader = cachedResponse.headers.get('X-Cache-Fetched-At');
       const dateHeader = cachedResponse.headers.get('Date');
-      const cachedAt = dateHeader ? new Date(dateHeader).getTime() : 0;
+
+      let cachedAt = 0;
+      if (fetchedAtHeader) {
+        cachedAt = parseInt(fetchedAtHeader, 10);
+      } else if (dateHeader) {
+        cachedAt = new Date(dateHeader).getTime();
+      }
+
       isExpired = (Date.now() - cachedAt) > API_CACHE_MAX_AGE_MS;
     }
 
@@ -259,7 +293,8 @@ async function precacheApiContent() {
       try {
         const networkResponse = await fetch(request);
         if (networkResponse && networkResponse.status === 200) {
-          await cache.put(request, networkResponse);
+          const responseToCache = await createResponseWithFetchTime(networkResponse.clone());
+          await cache.put(request, responseToCache);
         }
       } catch (e) {
         console.warn(`[ServiceWorker] Failed to pre-cache API content for page ${i}`, e);
