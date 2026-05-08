@@ -127,8 +127,8 @@ self.addEventListener('fetch', (evt) => {
     return;
   }
 
-  // Strategy 3: Static assets (CSS, JS, Fonts, Images) (Cache-first)
-  evt.respondWith(handleStaticAssetRequest(request));
+  // Strategy 3: Static assets (CSS, JS, Fonts, Images) (Stale-While-Revalidate)
+  evt.respondWith(handleStaticAssetRequest(request, evt));
 });
 
 
@@ -196,34 +196,40 @@ async function handleNavigationRequest(request) {
 }
 
 /**
- * Handles static asset requests with a "Network First" strategy.
- * Always tries to fetch from the network and updates the cache if successful.
- * Falls back to cache if the network fails.
+ * Handles static asset requests with a "Stale-While-Revalidate" strategy.
+ * Returns the cached response immediately if available, while simultaneously
+ * fetching from the network in the background to update the cache.
  */
-async function handleStaticAssetRequest(request) {
-  try {
-    // 1. Try to fetch from the network (bypass browser cache to be sure)
-    const networkResponse = await fetch(request);
+async function handleStaticAssetRequest(request, evt) {
+  const cachedResponse = await caches.match(request, { ignoreSearch: true });
 
-    if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
-      // 2. Success! Update the cache with the fresh content
-      const cache = await caches.open(CORE_CACHE_NAME);
-      await cache.put(request, networkResponse.clone());
+  const networkFetchPromise = (async () => {
+    try {
+      const networkResponse = await fetch(request);
+      if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+        const cache = await caches.open(CORE_CACHE_NAME);
+        await cache.put(request, networkResponse.clone());
+      }
       return networkResponse;
+    } catch (e) {
+      console.log(`[SW] Network failed for ${request.url}.`, e);
+      if (!cachedResponse) {
+        return new Response(`Offline: Failed to fetch ${request.url}`, { status: 503 });
+      }
+      throw e;
     }
+  })();
 
-    // Fallback to cache if network response is not OK (e.g. 404, 500)
-    const cachedResponse = await caches.match(request, { ignoreSearch: true });
-    return cachedResponse || networkResponse;
-  } catch (e) {
-    // 3. Network failure (offline) - Fallback to cache
-    console.log(`[SW] Network failed for ${request.url}. Falling back to cache.`);
-    const cachedResponse = await caches.match(request, { ignoreSearch: true });
-    if (cachedResponse) {
-      return cachedResponse;
+  if (cachedResponse) {
+    // If we have a cache, return it immediately and let the network fetch run in the background
+    if (evt && evt.waitUntil) {
+      evt.waitUntil(networkFetchPromise.catch(() => {}));
     }
-    return new Response(`Offline: Failed to fetch ${request.url}`, { status: 503 });
+    return cachedResponse;
   }
+
+  // If no cache, wait for the network response
+  return networkFetchPromise;
 }
 
 // 4. Utility Functions
