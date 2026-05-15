@@ -41,6 +41,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function renderPortalCards(querySnapshot) {
+        for (let slot = 1; slot <= 8; slot++) {
+            const slotElement = portalGrid.querySelector(`[data-slot="${slot}"]`);
+            if (slotElement) {
+                slotElement.classList.add('invisible');
+            }
+        }
+
         querySnapshot.forEach((doc) => {
             const cardData = doc.data();
             const docId = doc.id;
