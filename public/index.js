@@ -43,10 +43,29 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderPortalCards(querySnapshot) {
         querySnapshot.forEach((doc) => {
             const cardData = doc.data();
-            const docId = doc.id; // e.g., 'card1', 'card2'
-            const existingLink = portalGrid.querySelector(`[data-page="${docId}"]`);
+            const docId = doc.id;
+
+            // Determine position. Backward compatibility: if no position is set, try to infer from ID (e.g. "card1" -> 1)
+            // Note: position === null means it was explicitly set to hidden, so only fallback if undefined.
+            let position = cardData.position;
+            if (position === undefined) {
+                const match = docId.match(/^card(\d+)$/);
+                if (match) {
+                    position = parseInt(match[1], 10);
+                }
+            }
+
+            if (!position || position < 1 || position > 8) {
+                return; // Do not render if position is not between 1 and 8
+            }
+
+            const existingLink = portalGrid.querySelector(`[data-slot="${position}"]`);
 
             if (existingLink) {
+                // Make the slot visible since it has data
+                existingLink.classList.remove('invisible');
+                existingLink.classList.add('visible');
+
                 // Update link
                 if (cardData.url) {
                     existingLink.href = cardData.url;
