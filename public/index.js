@@ -3,9 +3,6 @@ lucide.createIcons();
 
 // Load Portal Cards from Firestore
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined') return;
-
-    const db = firebase.firestore();
     const portalGrid = document.getElementById('portal-grid');
     if (!portalGrid) return;
 
@@ -22,6 +19,80 @@ document.addEventListener('DOMContentLoaded', () => {
         'indigo': { text: 'text-indigo-400', grad: 'from-indigo-500 to-indigo-800' }
     };
 
+    const defaultIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white icon-glow"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+    const defaultPortalCards = [
+        { position: 1, title: 'えひめ連携企業紹介', url: '/renkei/' },
+        { position: 2, title: '松山ミュージアム<br>ストリート', url: '/museum-street/' },
+        { position: 3, title: '愛媛大学<br>ミュージアム', url: '#' },
+        { position: 4, title: 'イマジン・デッキ', url: '#' },
+        { position: 5, title: '学生生活<br>サポート', url: '#' },
+        { position: 6, title: '大学生協<br>サイト', url: '#' },
+        { position: 7, title: '修学支援<br>システム', url: '#' },
+        { position: 8, title: '問い合わせ先', url: '#' }
+    ];
+
+    function resetSlot(slotElement) {
+        slotElement.classList.add('invisible');
+        slotElement.classList.remove('visible');
+        slotElement.classList.add('default-text-color');
+
+        const iconContainer = slotElement.querySelector('.plasma-sphere');
+        if (iconContainer) {
+            const iconTextClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('text-') && !['text-center'].includes(c));
+            iconContainer.classList.remove(...iconTextClasses);
+            iconContainer.classList.add('text-slate-500');
+
+            const gradClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('bg-') || c.startsWith('from-') || c.startsWith('to-'));
+            iconContainer.classList.remove(...gradClasses);
+            iconContainer.classList.add('bg-slate-500');
+            iconContainer.innerHTML = defaultIconSvg;
+        }
+
+        const spanElement = slotElement.querySelector('span');
+        if (spanElement) {
+            spanElement.classList.remove('text-slate-500');
+            spanElement.classList.add('text-slate-200');
+            spanElement.innerHTML = '';
+        }
+
+        slotElement.href = '#';
+    }
+
+    function resetAllSlots() {
+        for (let slot = 1; slot <= 8; slot++) {
+            const slotElement = portalGrid.querySelector(`[data-slot="${slot}"]`);
+            if (slotElement) {
+                resetSlot(slotElement);
+            }
+        }
+    }
+
+    function renderDefaultPortalCards() {
+        resetAllSlots();
+        defaultPortalCards.forEach((defaultCard) => {
+            const slotElement = portalGrid.querySelector(`[data-slot="${defaultCard.position}"]`);
+            if (!slotElement) return;
+
+            slotElement.classList.remove('invisible');
+            slotElement.classList.add('visible');
+            slotElement.href = defaultCard.url;
+
+            const spanElement = slotElement.querySelector('span');
+            if (spanElement) {
+                spanElement.innerHTML = defaultCard.title;
+            }
+        });
+
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    renderDefaultPortalCards();
+
+    if (typeof firebase === 'undefined') return;
+    const db = firebase.firestore();
+
     // Try to get data from cache first for fast loading
     db.collection("portalCards").get({ source: 'cache' }).then((querySnapshot) => {
         if (!querySnapshot.empty) {
@@ -35,20 +106,15 @@ document.addEventListener('DOMContentLoaded', () => {
     db.collection("portalCards").get({ source: 'server' }).then((querySnapshot) => {
         if (!querySnapshot.empty) {
             renderPortalCards(querySnapshot);
+        } else {
+            renderDefaultPortalCards();
         }
     }).catch((error) => {
         console.log("Failed to load from server:", error);
     });
 
     function renderPortalCards(querySnapshot) {
-        // First hide all slots
-        for (let i = 1; i <= 8; i++) {
-            const slot = portalGrid.querySelector(`[data-slot="${i}"]`);
-            if (slot) {
-                slot.classList.remove('visible');
-                slot.classList.add('invisible');
-            }
-        }
+        resetAllSlots();
 
         querySnapshot.forEach((doc) => {
             const cardData = doc.data();
