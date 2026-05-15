@@ -41,10 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function renderPortalCards(querySnapshot) {
-        for (let slot = 1; slot <= 8; slot++) {
-            const slotElement = portalGrid.querySelector(`[data-slot="${slot}"]`);
-            if (slotElement) {
-                slotElement.classList.add('invisible');
+        // First hide all slots
+        for (let i = 1; i <= 8; i++) {
+            const slot = portalGrid.querySelector(`[data-slot="${i}"]`);
+            if (slot) {
+                slot.classList.remove('visible');
+                slot.classList.add('invisible');
             }
         }
 
