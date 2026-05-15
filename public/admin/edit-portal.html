@@ -129,6 +129,8 @@
         const storageKey = 'admin_auth_token';
         const db = firebase.firestore();
         const COLLECTION_NAME = 'portalCards';
+        // Firestore write batch limit is 500 ops; keep a safety margin.
+        const MAX_BATCH_OPS = 450;
 
         // Initial Data (Matching public/index.html)
         let cards = [
@@ -375,7 +377,6 @@
                     writeOperations.push({ type: 'delete', docRef });
                 });
 
-                const MAX_BATCH_OPS = 450;
                 for (let i = 0; i < writeOperations.length; i += MAX_BATCH_OPS) {
                     const batch = db.batch();
                     const chunk = writeOperations.slice(i, i + MAX_BATCH_OPS);
