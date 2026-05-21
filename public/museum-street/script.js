@@ -197,14 +197,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    async function waitForServiceWorkerReady() {
+        if (!('serviceWorker' in navigator)) {
+            console.warn('[Museum Street] Service worker is not supported.');
+            return;
+        }
+
+        try {
+            console.log('[Museum Street] Waiting for service worker registration.');
+            await navigator.serviceWorker.register('/sw.js');
+
+            // Wait for ready, but timeout after 1 second to avoid blocking initial render
+            // or hanging forever if activation fails.
+            await Promise.race([
+                navigator.serviceWorker.ready,
+                new Promise(resolve => setTimeout(() => {
+                    console.log('[Museum Street] Service worker readiness timeout reached.');
+                    resolve();
+                }, 1000))
+            ]);
+            console.log('[Museum Street] Service worker registration complete/ready wait finished.');
+        } catch (error) {
+            console.warn('[Museum Street] Service worker setup failed; continuing without it.', error);
+        }
+    }
+
     const initialLink = navContainer.querySelector(`[data-page="${defaultPage}"]`);
     if (initialLink) {
         initialLink.classList.add('active');
         activeLink = initialLink;
-        loadEventsContent(defaultPage);
-        if (currentTab === 'map') {
-            loadMapContent(defaultPage);
-        }
+
+        waitForServiceWorkerReady().finally(() => {
+            console.log('[Museum Street] Loading initial default page content.');
+            loadEventsContent(defaultPage);
+            if (currentTab === 'map') {
+                loadMapContent(defaultPage);
+            }
+        });
     }
 
     // Initial menu state for mobile
