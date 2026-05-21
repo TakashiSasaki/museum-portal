@@ -204,10 +204,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            console.log('[Museum Street] Waiting for service worker registration and readiness.');
+            console.log('[Museum Street] Waiting for service worker registration.');
             await navigator.serviceWorker.register('/sw.js');
-            await navigator.serviceWorker.ready;
-            console.log('[Museum Street] Service worker is ready.');
+
+            // Wait for ready, but timeout after 1 second to avoid blocking initial render
+            // or hanging forever if activation fails.
+            await Promise.race([
+                navigator.serviceWorker.ready,
+                new Promise(resolve => setTimeout(() => {
+                    console.log('[Museum Street] Service worker readiness timeout reached.');
+                    resolve();
+                }, 1000))
+            ]);
+            console.log('[Museum Street] Service worker registration complete/ready wait finished.');
         } catch (error) {
             console.warn('[Museum Street] Service worker setup failed; continuing without it.', error);
         }
