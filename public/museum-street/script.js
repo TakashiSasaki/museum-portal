@@ -1,3 +1,5 @@
+const SERVICE_WORKER_READY_TIMEOUT_MS = 1000;
+
 document.addEventListener('DOMContentLoaded', () => {
     const navContainer = document.getElementById('museum-nav');
     const contentFrame = document.getElementById('content-frame');
@@ -200,25 +202,34 @@ document.addEventListener('DOMContentLoaded', () => {
     async function waitForServiceWorkerReady() {
         if (!('serviceWorker' in navigator)) {
             console.warn('[Museum Street] Service worker is not supported.');
-            return;
+            return 'unsupported';
         }
 
         try {
-            console.log('[Museum Street] Waiting for service worker registration.');
+            console.log('[Museum Street] Registering service worker and waiting for readiness.');
             await navigator.serviceWorker.register('/sw.js');
 
-            // Wait for ready, but timeout after 1 second to avoid blocking initial render
-            // or hanging forever if activation fails.
-            await Promise.race([
-                navigator.serviceWorker.ready,
-                new Promise(resolve => setTimeout(() => {
-                    console.log('[Museum Street] Service worker readiness timeout reached.');
-                    resolve();
-                }, 1000))
+            const waitResult = await Promise.race([
+                navigator.serviceWorker.ready.then(() => 'ready'),
+                new Promise(resolve => setTimeout(() => resolve('timeout'), SERVICE_WORKER_READY_TIMEOUT_MS))
             ]);
-            console.log('[Museum Street] Service worker registration complete/ready wait finished.');
+
+            if (waitResult === 'ready') {
+                console.log('[Museum Street] Service worker ready before timeout.');
+            } else {
+                console.warn(`[Museum Street] Service worker readiness timed out after ${SERVICE_WORKER_READY_TIMEOUT_MS} ms.`);
+            }
+
+            if (navigator.serviceWorker.controller) {
+                console.log('[Museum Street] Current page is controlled by a service worker.');
+            } else {
+                console.warn('[Museum Street] Current page is not yet controlled by a service worker.');
+            }
+
+            return waitResult;
         } catch (error) {
             console.warn('[Museum Street] Service worker setup failed; continuing without it.', error);
+            return 'failed';
         }
     }
 
@@ -227,13 +238,19 @@ document.addEventListener('DOMContentLoaded', () => {
         initialLink.classList.add('active');
         activeLink = initialLink;
 
-        waitForServiceWorkerReady().finally(() => {
-            console.log('[Museum Street] Loading initial default page content.');
-            loadEventsContent(defaultPage);
-            if (currentTab === 'map') {
-                loadMapContent(defaultPage);
+        (async () => {
+            try {
+                const status = await waitForServiceWorkerReady();
+                console.log(`[Museum Street] Initial content load proceeding after service worker wait status: ${status}.`);
+            } catch (error) {
+                console.warn('[Museum Street] Unexpected error during service worker wait:', error);
+            } finally {
+                loadEventsContent(defaultPage);
+                if (currentTab === 'map') {
+                    loadMapContent(defaultPage);
+                }
             }
-        });
+        })();
     }
 
     // Initial menu state for mobile

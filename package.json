@@ -6,7 +6,8 @@
   "devDependencies": {
     "@types/bun": "latest",
     "firebase": "^12.11.0",
-    "firebase-admin": "^13.7.0"
+    "firebase-admin": "^13.7.0",
+    "playwright": "^1.60.0"
   },
   "peerDependencies": {
     "typescript": "^5"
