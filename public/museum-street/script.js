@@ -197,14 +197,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    async function waitForServiceWorkerReady() {
+        if (!('serviceWorker' in navigator)) {
+            console.warn('[Museum Street] Service worker is not supported.');
+            return;
+        }
+
+        try {
+            console.log('[Museum Street] Waiting for service worker registration and readiness.');
+            await navigator.serviceWorker.register('/sw.js');
+            await navigator.serviceWorker.ready;
+            console.log('[Museum Street] Service worker is ready.');
+        } catch (error) {
+            console.warn('[Museum Street] Service worker setup failed; continuing without it.', error);
+        }
+    }
+
     const initialLink = navContainer.querySelector(`[data-page="${defaultPage}"]`);
     if (initialLink) {
         initialLink.classList.add('active');
         activeLink = initialLink;
-        loadEventsContent(defaultPage);
-        if (currentTab === 'map') {
-            loadMapContent(defaultPage);
-        }
+
+        waitForServiceWorkerReady().finally(() => {
+            console.log('[Museum Street] Loading initial default page content.');
+            loadEventsContent(defaultPage);
+            if (currentTab === 'map') {
+                loadMapContent(defaultPage);
+            }
+        });
     }
 
     // Initial menu state for mobile
