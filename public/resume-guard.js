@@ -28,7 +28,7 @@
 
   function isStandalonePwa() {
     return Boolean(
-      window.matchMedia?.('(display-mode: standalone)')?.matches ||
+      window.matchMedia?.('(display-mode: standalone)').matches ||
       window.navigator.standalone === true
     );
   }

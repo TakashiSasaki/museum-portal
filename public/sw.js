@@ -214,7 +214,7 @@ async function handleNavigationRequest(request) {
     return networkResponse;
   } catch (error) {
     console.log(`[ServiceWorker] Network failed for navigation. Trying cache for: ${request.url}`);
-    const cachedResponse = await caches.match(request);
+    const cachedResponse = await caches.match(request, { ignoreSearch: true });
     if (cachedResponse) {
       return cachedResponse;
     }
