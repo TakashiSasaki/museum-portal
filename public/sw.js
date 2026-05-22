@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v24'; // Event Delegation for dynamic cards
+const CORE_CACHE_VERSION = 'v25'; // Event Delegation for dynamic cards
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -16,6 +16,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP
 
 const CORE_ASSETS_TO_CACHE = [
   '/',
+  '/resume-guard.js',
   '/index.html',
   '/index.css',
   '/index.js',
