@@ -33,6 +33,32 @@
     <div class="nebula-layer"></div>
     <div class="star-dust"></div>
 
+    <!-- PWA Install Button -->
+    <button
+        id="pwa-install-button"
+        class="pwa-install-button group"
+        type="button"
+        aria-label="このサイトをアプリとしてインストール"
+        title="アプリとしてインストール"
+        hidden
+    >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full text-slate-200 group-hover:text-white transition-colors icon-glow">
+            <!-- Star 1 (gold) -->
+            <path d="M5 5 L5.5 6.5 L7 7 L5.5 7.5 L5 9 L4.5 7.5 L3 7 L4.5 6.5 Z" fill="#b1a348" stroke="none" />
+            <!-- Star 2 (cyan) -->
+            <path d="M19 4 L19.25 5 L20.25 5.25 L19.25 5.5 L19 6.5 L18.75 5.5 L17.75 5.25 L18.75 5 Z" fill="#67e8f9" stroke="none" />
+
+            <!-- Arrow pointing down -->
+            <path d="M12 2v9" />
+            <path d="M8 7l4 4 4-4" />
+
+            <!-- App rectangle with rounded corners -->
+            <rect x="5" y="12" width="14" height="10" rx="2" ry="2" />
+            <!-- Small indicator inside like a home bar -->
+            <path d="M10 18h4" opacity="0.6" />
+        </svg>
+    </button>
+
     <!-- Header Area: 位置関係を元の状態 (1_English 2_Japanese 3_Slogan) へ復元 -->
     <header class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl px-2 sm:px-4 text-center mb-2 sm:mb-3 mt-2 landscape:mb-2 landscape:mt-1 relative z-10 flex-shrink-0">
         <!-- 1. EHIME UNIVERSITY MUSEUM (英字タイトル・ゴールド) -->

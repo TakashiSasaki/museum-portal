@@ -42,6 +42,64 @@ body {
     pointer-events: none;
 }
 
+/* --- PWA Install Button --- */
+.pwa-install-button {
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top));
+    right: calc(16px + env(safe-area-inset-right));
+    z-index: 50; /* Above background/header, below iOS prompt */
+    width: 44px;
+    height: 44px;
+    padding: 8px;
+    border-radius: 12px;
+    background: rgba(15, 20, 35, 0.4);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.4),
+        inset 0 0 10px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pwa-install-button[hidden] {
+    display: none !important;
+}
+
+.pwa-install-button:hover {
+    background: rgba(25, 30, 50, 0.5);
+    box-shadow:
+        0 6px 20px rgba(0, 0, 0, 0.5),
+        0 0 10px rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.pwa-install-button:active {
+    transform: translateY(2px) scale(0.95);
+    background: rgba(10, 15, 25, 0.6);
+}
+
+.pwa-install-button:focus-visible {
+    outline: 2px solid #67e8f9;
+    outline-offset: 2px;
+}
+
+/* Small screens: ensure button doesn't overlap header and is slightly smaller */
+@media (max-width: 400px) {
+    .pwa-install-button {
+        top: calc(8px + env(safe-area-inset-top));
+        right: calc(8px + env(safe-area-inset-right));
+        width: 38px;
+        height: 38px;
+        padding: 6px;
+        border-radius: 10px;
+    }
+}
+
 /* --- ダーク・グラスモーフィズムのカード --- */
 .cosmic-card {
     position: relative;

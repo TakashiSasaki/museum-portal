@@ -265,6 +265,72 @@ if (footerTrigger) {
 }
 
 
+// --- PWA Install Button Logic ---
+function initPwaInstallButton() {
+  const installBtn = document.getElementById('pwa-install-button');
+  if (!installBtn) return;
+
+  let deferredInstallPrompt = null;
+
+  function isStandaloneMode() {
+    return ('standalone' in window.navigator && window.navigator.standalone) ||
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches;
+  }
+
+  // If already running as PWA, keep hidden
+  if (isStandaloneMode()) {
+    installBtn.hidden = true;
+    return;
+  }
+
+  // Listen for the beforeinstallprompt event
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Stash the event so it can be triggered later.
+    deferredInstallPrompt = e;
+
+    // Only show the install button if not already in standalone mode
+    if (!isStandaloneMode()) {
+      installBtn.hidden = false;
+    }
+  });
+
+  // Handle click on the install button
+  installBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+
+    // Show the install prompt
+    deferredInstallPrompt.prompt();
+
+    try {
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      console.log(`User response to the install prompt: ${outcome}`);
+    } catch (err) {
+      console.log("Install prompt error:", err);
+    }
+
+    // We've used the prompt, and can't use it again, discard it
+    deferredInstallPrompt = null;
+    // Hide the button
+    installBtn.hidden = true;
+  });
+
+  // Listen for the appinstalled event
+  window.addEventListener('appinstalled', () => {
+    // Hide the button after successful installation
+    installBtn.hidden = true;
+    deferredInstallPrompt = null;
+    console.log('PWA was installed');
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initPwaInstallButton);
+
+
 // --- iOS PWA Install Prompt Logic ---
 function initIosPwaPrompt() {
   function isIOS() {
