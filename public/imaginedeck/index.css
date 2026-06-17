@@ -566,7 +566,7 @@
 
         .qr-wrapper-horizontal img {
             height: 100%;
-            max-height: 10cqw;
+            max-height: 20cqw;
             object-fit: contain;
         }
 
