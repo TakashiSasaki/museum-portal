@@ -646,7 +646,13 @@
                 }
 
                 calculateNoticePages();
-                renderNoticeTab('upcoming');
+                if (upcomingPages.length > 0) {
+                    renderNoticeTab('upcoming');
+                } else if (pastPages.length > 0) {
+                    renderNoticeTab('past');
+                } else {
+                    renderNoticeTab('upcoming');
+                }
                 startNoticeAutoPlay();
                 renderCalendar(currentYear, currentMonth);
 
@@ -691,25 +697,33 @@
         function nextNoticePage() {
             if (currentTab === 'upcoming') {
                 if (upcomingPages.length === 0) {
-                    renderNoticeTab('past');
+                    if (pastPages.length > 0) renderNoticeTab('past');
                     return;
                 }
                 currentUpcomingPage++;
                 if (currentUpcomingPage >= upcomingPages.length) {
                     currentUpcomingPage = 0;
-                    renderNoticeTab('past');
+                    if (pastPages.length > 0) {
+                        renderNoticeTab('past');
+                    } else {
+                        renderNoticeTab('upcoming');
+                    }
                 } else {
                     renderNoticeTab('upcoming');
                 }
             } else {
                 if (pastPages.length === 0) {
-                    renderNoticeTab('upcoming');
+                    if (upcomingPages.length > 0) renderNoticeTab('upcoming');
                     return;
                 }
                 currentPastPage++;
                 if (currentPastPage >= pastPages.length) {
                     currentPastPage = 0;
-                    renderNoticeTab('upcoming');
+                    if (upcomingPages.length > 0) {
+                        renderNoticeTab('upcoming');
+                    } else {
+                        renderNoticeTab('past');
+                    }
                 } else {
                     renderNoticeTab('past');
                 }
