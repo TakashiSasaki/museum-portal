@@ -484,37 +484,48 @@
             }
         }
 
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         function renderNoticeItemHTML(item) {
             let timeStr = '';
             if (item.kind === 'upcoming') {
                 if (item.isMultiDay) {
-                    timeStr = ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">〜${item.endDate.replace(/-/g, '.')}</span>`;
+                    timeStr = ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">〜${escapeHTML(item.endDate.replace(/-/g, '.'))}</span>`;
                 } else if (item.hasTime) {
-                    timeStr = ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">${item.start}${item.end ? '〜' + item.end : ''}</span>`;
+                    timeStr = ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">${escapeHTML(item.start)}${item.end ? '〜' + escapeHTML(item.end) : ''}</span>`;
                 } else {
                     timeStr = ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">終日</span>`;
                 }
             }
 
             const exclusiveBadge = item.exclusive ? `<span class="notice-badge exclusive">🔒 貸切</span>` : '';
-            const typeBadge = `<span class="type-badge type-${item.type || 'other'}">${getTypeLabel(item.type)}</span>`;
+            const typeClass = escapeHTML(item.type || 'other');
+            const typeBadge = `<span class="type-badge type-${typeClass}">${escapeHTML(getTypeLabel(item.type))}</span>`;
 
             let html = `
-                <span class="notice-date">${item.date}${timeStr}${exclusiveBadge}</span>
-                <div class="notice-text">${typeBadge}${item.title}</div>
+                <span class="notice-date">${escapeHTML(item.date)}${timeStr}${exclusiveBadge}</span>
+                <div class="notice-text">${typeBadge}${escapeHTML(item.title)}</div>
             `;
 
             if (item.kind === 'past') {
                 let pastContent = '';
                 if (item.image) {
-                    pastContent += `<img src="${item.image}" class="notice-past-image" alt="" onerror="this.style.display='none'">`;
+                    pastContent += `<img src="${escapeHTML(item.image)}" class="notice-past-image" alt="" onerror="this.style.display='none'">`;
                 }
                 pastContent += `<div class="notice-past-details">`;
                 if (item.organizer) {
-                    pastContent += `<div class="notice-past-organizer">${item.organizer}</div>`;
+                    pastContent += `<div class="notice-past-organizer">${escapeHTML(item.organizer)}</div>`;
                 }
                 if (item.excerpt) {
-                    pastContent += `<div class="notice-past-excerpt">${item.excerpt}</div>`;
+                    pastContent += `<div class="notice-past-excerpt">${escapeHTML(item.excerpt)}</div>`;
                 }
                 pastContent += `</div>`;
 
@@ -544,6 +555,7 @@
                 li.innerHTML = renderNoticeItemHTML(item);
                 li.style.visibility = 'hidden';
                 li.style.position = 'absolute';
+                li.style.width = '100%'; // widthを指定して折り返しを正しく計算させる
                 listElement.appendChild(li);
 
                 // borderやpaddingを含めた高さを取得
