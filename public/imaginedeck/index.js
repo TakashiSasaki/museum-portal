@@ -1,5 +1,15 @@
         let allNotices = []; // イベントリストをグローバルに保持（初期化エラー回避のため先頭に移動）
 
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         /* =========================================
            1. 上フレームの処理（時計・ストップウォッチ・タイマー）
            ========================================= */
@@ -80,9 +90,9 @@
 
             if (activeAlert) {
                 if (activeAlert.exclusive) {
-                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。<br>${activeAlert.endTime} まではイベント参加者のみご利用いただけます。`;
+                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${escapeHTML(activeAlert.title)}』が始まります。<br>${activeAlert.endTime} まではイベント参加者のみご利用いただけます。`;
                 } else {
-                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。`;
+                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${escapeHTML(activeAlert.title)}』が始まります。`;
                 }
                 alertEl.style.display = 'block';
             } else {
@@ -368,7 +378,7 @@
                 const eventsForDay = typeof allNotices !== 'undefined' ? allNotices.filter(n => n.date === cellDateStr) : [];
                 let eventsHtml = '';
                 if (eventsForDay.length > 0) {
-                    eventsHtml = eventsForDay.map(e => `<div class="event-item">${e.title}</div>`).join('');
+                    eventsHtml = eventsForDay.map(e => `<div class="event-item">${escapeHTML(e.title)}</div>`).join('');
                 }
 
                 // 日付とイベントを書き込み
@@ -467,146 +477,187 @@
         resetInteractionTimer();
 
         /* =========================================
-           3. お知らせフィード（ダミーデータ）の処理
+           3. お知らせフィード（実データ）の処理
            ========================================= */
-        // 20件のダミーイベントタイトルを用意
-        const dummyEventTitles = [
-            "特別展「愛媛の昆虫と自然」開催のお知らせ", "ミュージアム講座：化石から読み解く古代の四国", "イマジン・デッキ ワークショップ：オリジナル化石レプリカ作り",
-            "愛媛大学創立記念 特別企画展示のご案内", "学生企画展：私たちのフィールドワーク報告", "館内ガイドツアーのご案内（毎週土曜日開催）",
-            "休館日のお知らせ（次回：来週火曜日）", "ミュージアムカフェ 季節の限定メニュー登場", "新収蔵品のご紹介：〇〇遺跡出土の土器",
-            "愛媛大学研究者によるギャラリートーク（今週末）", "昆虫標本作成体験教室の参加者募集", "理学部合同企画「鉱物と宝石のひみつ」",
-            "夏休み特別企画：キッズ・サイエンス・ラボ", "常設展示 一部リニューアルのお知らせ", "ミュージアムショップ 新着グッズのご案内",
-            "大学祭（学生祭）期間中の開館時間延長について", "企画展「瀬戸内の海洋生物」入場者1万人突破！", "館内メンテナンスに伴う一部展示室の閉鎖について",
-            "愛媛大学ミュージアム ボランティアガイド募集", "イマジン・デッキ利用時間変更のお知らせ"
-        ];
-
-        // ダミーのRSSフィード(XML形式)を生成する
-        const dummyXmlString = `<?xml version="1.0" encoding="UTF-8" ?>
-            <rss version="2.0">
-            <channel>
-                <title>サイネージお知らせフィード</title>
-                ${dummyEventTitles.map((title, i) => {
-            const d = new Date();
-            d.setDate(d.getDate() + (i - 10)); // カレンダー上に散らばるように今日を中心に前後へずらす
-            
-            // 時刻の生成 (9:00〜17:00の間で1分単位)
-            const startH = String(9 + (i % 8)).padStart(2, '00');
-            const startM = String((i * 7) % 60).padStart(2, '00');
-            const endH = String(parseInt(startH) + 1 + (i % 3)).padStart(2, '00');
-            const endM = String((i * 13) % 60).padStart(2, '00');
-
-            // 排他フラグ：奇数番インデックスのイベントを「貸切」に設定
-            const exclusive = (i % 3 === 0) ? 'true' : 'false';
-
-            return `
-                <item>
-                    <title>${title}</title>
-                    <pubDate>${d.toUTCString()}</pubDate>
-                    <startTime>${startH}:${startM}</startTime>
-                    <endTime>${endH}:${endM}</endTime>
-                    <exclusive>${exclusive}</exclusive>
-            </item>`;
-        }).join('')}
-        </channel>
-        </rss>`;
 
         let currentNoticePage = 0;
-        let noticesPerPage = 5; // 1ページあたりの表示件数（動的に更新されます）
+        let noticePages = []; // ページごとのアイテムの配列
         let noticeAutoPlayInterval;
 
-        function calculateNoticesPerPage() {
+        function getTypeLabel(type) {
+            switch(type) {
+                case 'event': return 'イベント';
+                case 'workshop': return 'ワークショップ';
+                case 'exhibition': return '企画展';
+                case 'other': return 'その他';
+                default: return 'お知らせ';
+            }
+        }
+
+        function renderNoticeItemHTML(item) {
+            let timeStr = '';
+            if (item.kind === 'upcoming') {
+                if (item.isMultiDay) {
+                    timeStr = ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">〜${escapeHTML(item.endDate.replace(/-/g, '.'))}</span>`;
+                } else if (item.hasTime) {
+                    timeStr = ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">${escapeHTML(item.start)}${item.end ? '〜' + escapeHTML(item.end) : ''}</span>`;
+                } else {
+                    timeStr = ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">終日</span>`;
+                }
+            }
+
+            const exclusiveBadge = item.exclusive ? `<span class="notice-badge exclusive">🔒 貸切</span>` : '';
+            const typeClass = escapeHTML(item.type || 'other');
+            const typeBadge = `<span class="type-badge type-${typeClass}">${escapeHTML(getTypeLabel(item.type))}</span>`;
+
+            let html = `
+                <span class="notice-date">${escapeHTML(item.date)}${timeStr}${exclusiveBadge}</span>
+                <div class="notice-text">${typeBadge}${escapeHTML(item.title)}</div>
+            `;
+
+            if (item.kind === 'past') {
+                let pastContent = '';
+                if (item.image) {
+                    pastContent += `<img src="${escapeHTML(item.image)}" class="notice-past-image" alt="" onerror="this.style.display='none'">`;
+                }
+                pastContent += `<div class="notice-past-details">`;
+                if (item.organizer) {
+                    pastContent += `<div class="notice-past-organizer">${escapeHTML(item.organizer)}</div>`;
+                }
+                if (item.excerpt) {
+                    pastContent += `<div class="notice-past-excerpt">${escapeHTML(item.excerpt)}</div>`;
+                }
+                pastContent += `</div>`;
+
+                if (pastContent !== `<div class="notice-past-details"></div>`) {
+                    html += `<div class="notice-past-content">${pastContent}</div>`;
+                }
+            }
+
+            return html;
+        }
+
+        function calculateNoticePages() {
             const wrapper = document.querySelector('.notice-wrapper');
             const header = document.querySelector('.notice-header');
             const listElement = document.getElementById('notice-list');
             
-            if (!wrapper || !header || !listElement) return 5;
+            if (!wrapper || !header || !listElement || allNotices.length === 0) return;
 
-            // 仮の1件をレンダリングして高さを計測
-            const testLi = document.createElement('li');
-            testLi.innerHTML = `
-                <span class="notice-date">0000.00.00</span>
-                <span class="notice-text">テストテキスト</span>
-            `;
-            listElement.appendChild(testLi);
-            const itemHeight = testLi.getBoundingClientRect().height;
-            testLi.remove();
-
-            const availableHeight = wrapper.clientHeight - header.offsetHeight;
-            const calculated = Math.floor(availableHeight / itemHeight);
+            const availableHeight = wrapper.clientHeight - header.offsetHeight - 10; // 余裕を少し持たせる
             
-            noticesPerPage = calculated > 0 ? calculated : 5;
-            return noticesPerPage;
+            // 全アイテムの高さを計測
+            listElement.innerHTML = '';
+            const itemHeights = [];
+
+            for (const item of allNotices) {
+                const li = document.createElement('li');
+                li.innerHTML = renderNoticeItemHTML(item);
+                li.style.visibility = 'hidden';
+                li.style.position = 'absolute';
+                li.style.width = '100%'; // widthを指定して折り返しを正しく計算させる
+                listElement.appendChild(li);
+
+                // borderやpaddingを含めた高さを取得
+                itemHeights.push(li.getBoundingClientRect().height);
+                li.remove();
+            }
+
+            noticePages = [];
+            let currentPage = [];
+            let currentHeight = 0;
+
+            for (let i = 0; i < allNotices.length; i++) {
+                const h = itemHeights[i];
+                if (currentPage.length > 0 && currentHeight + h > availableHeight) {
+                    noticePages.push(currentPage);
+                    currentPage = [allNotices[i]];
+                    currentHeight = h;
+                } else {
+                    currentPage.push(allNotices[i]);
+                    currentHeight += h;
+                }
+            }
+            if (currentPage.length > 0) {
+                noticePages.push(currentPage);
+            }
+
+            // currentNoticePage の範囲を調整
+            if (currentNoticePage >= noticePages.length) {
+                currentNoticePage = 0;
+            }
         }
 
         window.addEventListener('resize', () => {
-            calculateNoticesPerPage();
-            renderNoticePage(0);
+            calculateNoticePages();
+            renderNoticePage(currentNoticePage);
         });
 
-        function parseFeed() {
-            // XMLをパース
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(dummyXmlString, "text/xml");
-            const items = xmlDoc.querySelectorAll('item');
+        async function initFeeds() {
+            if (typeof loadMergedEvents !== 'function') return;
 
-            allNotices = []; // 初期化
+            try {
+                // 過去のイベントは1年以内（おおよそ）にするため制限。limit 50を渡す。
+                const data = await loadMergedEvents({ upcomingLimit: 50, pastLimit: 50 });
 
-            items.forEach(item => {
-                const title = item.querySelector('title').textContent;
-                const pubDateStr = item.querySelector('pubDate').textContent;
-                const startTime = item.querySelector('startTime') ? item.querySelector('startTime').textContent : '';
-                const endTime = item.querySelector('endTime') ? item.querySelector('endTime').textContent : '';
-                const exclusiveEl = item.querySelector('exclusive');
-                const exclusive = exclusiveEl ? exclusiveEl.textContent === 'true' : false;
+                // 1年前の日付を計算
+                const oneYearAgo = new Date();
+                oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                const oneYearAgoStr = `${oneYearAgo.getFullYear()}-${String(oneYearAgo.getMonth()+1).padStart(2, '0')}-${String(oneYearAgo.getDate()).padStart(2, '0')}`;
 
-                // 日付のフォーマット
-                const d = new Date(pubDateStr);
-                const formattedDate = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+                allNotices = [];
+                for (const item of data.merged) {
+                    // 過去イベントの1年フィルター
+                    if (item.kind === 'past' && item.date < oneYearAgoStr) {
+                        continue;
+                    }
 
-                allNotices.push({ title: title, date: formattedDate, startTime: startTime, endTime: endTime, exclusive: exclusive });
-            });
+                    // 既存のサイネージロジック用にフォーマットを変換
+                    const formattedDate = item.date.replace(/-/g, '.');
 
-            // 表示件数を計算
-            calculateNoticesPerPage();
+                    allNotices.push({
+                        ...item,
+                        date: formattedDate,       // YYYY.MM.DD形式
+                        startTime: item.start,     // 既存のstartTimeプロパティにマップ
+                        endTime: item.end,         // 既存のendTimeプロパティにマップ
+                        exclusive: item.isReserved // 貸切フラグ
+                    });
+                }
 
-            // 最初のページを表示して自動再生を開始
-            renderNoticePage(0);
-            startNoticeAutoPlay();
+                calculateNoticePages();
+                renderNoticePage(0);
+                startNoticeAutoPlay();
+                renderCalendar(currentYear, currentMonth);
 
-            // イベント情報を読み込んだ後にカレンダーを再描画してイベントを表示
-            renderCalendar(currentYear, currentMonth);
+            } catch (e) {
+                console.warn('[DEBUG] Failed to init feeds', e);
+            }
         }
 
-        function renderNoticePage(page) {
-            const totalPages = Math.ceil(allNotices.length / noticesPerPage);
-            if (totalPages === 0) return;
+        function renderNoticePage(pageIndex) {
+            if (noticePages.length === 0) return;
+
+            const totalPages = noticePages.length;
 
             // ページ範囲をループさせる
-            if (page < 0) page = totalPages - 1;
-            if (page >= totalPages) page = 0;
+            if (pageIndex < 0) pageIndex = totalPages - 1;
+            if (pageIndex >= totalPages) pageIndex = 0;
 
-            currentNoticePage = page;
+            currentNoticePage = pageIndex;
 
             const listElement = document.getElementById('notice-list');
             listElement.innerHTML = '';
 
-            const startIdx = page * noticesPerPage;
-            const endIdx = startIdx + noticesPerPage;
-            const pageItems = allNotices.slice(startIdx, endIdx);
+            const pageItems = noticePages[pageIndex];
 
             pageItems.forEach(item => {
                 const li = document.createElement('li');
-                const timeStr = (item.startTime && item.endTime) ? ` <span class="notice-time" style="margin-left: 1.5cqw; color: #555;">${item.startTime}〜${item.endTime}</span>` : '';
-                const badgeStr = item.exclusive ? `<span class="notice-badge exclusive">🔒 貸切</span>` : '';
-                li.innerHTML = `
-                    <span class="notice-date">${item.date}${timeStr}${badgeStr}</span>
-                    <span class="notice-text">${item.title}</span>
-                `;
+                li.innerHTML = renderNoticeItemHTML(item);
                 listElement.appendChild(li);
             });
 
             // ページインジケーターの更新
-            document.getElementById('notice-page-indicator').textContent = `${page + 1} / ${totalPages}`;
+            document.getElementById('notice-page-indicator').textContent = `${pageIndex + 1} / ${totalPages}`;
         }
 
         function nextNoticePage() {
@@ -634,7 +685,8 @@
             startNoticeAutoPlay(); // 手動操作時にタイマーをリセット
         });
 
-        parseFeed();
+        // 起動
+        initFeeds();
 
         /* =========================================
            4. 自動リロード処理

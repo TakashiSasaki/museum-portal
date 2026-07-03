@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v25'; // Event Delegation for dynamic cards
+const CORE_CACHE_VERSION = 'v26'; // Ignore signage feeds from caching
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -105,9 +105,13 @@ self.addEventListener('activate', (evt) => {
 self.addEventListener('fetch', (evt) => {
   const { request } = evt;
 
-  // Strategy 0: Ignore Firestore and other Google API requests.
-  // Let the Firebase SDK handle these requests with its own offline logic.
-  if (request.url.includes('googleapis.com')) {
+  // Strategy 0: Ignore external APIs and feeds that should not be cached by SW.
+  // Let the Firebase SDK handle googleapis with its own offline logic.
+  // Skip imagine deck feeds so they always bypass and load fresh.
+  if (
+    request.url.includes('googleapis.com') ||
+    request.url.includes('imaginedeck.igsrr.org/feed/')
+  ) {
     return;
   }
 
