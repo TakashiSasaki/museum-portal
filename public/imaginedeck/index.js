@@ -1,5 +1,15 @@
         let allNotices = []; // イベントリストをグローバルに保持（初期化エラー回避のため先頭に移動）
 
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         /* =========================================
            1. 上フレームの処理（時計・ストップウォッチ・タイマー）
            ========================================= */
@@ -80,9 +90,9 @@
 
             if (activeAlert) {
                 if (activeAlert.exclusive) {
-                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。<br>${activeAlert.endTime} まではイベント参加者のみご利用いただけます。`;
+                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${escapeHTML(activeAlert.title)}』が始まります。<br>${activeAlert.endTime} まではイベント参加者のみご利用いただけます。`;
                 } else {
-                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${activeAlert.title}』が始まります。`;
+                    alertEl.innerHTML = `まもなく ${activeAlert.startTime} より『${escapeHTML(activeAlert.title)}』が始まります。`;
                 }
                 alertEl.style.display = 'block';
             } else {
@@ -368,7 +378,7 @@
                 const eventsForDay = typeof allNotices !== 'undefined' ? allNotices.filter(n => n.date === cellDateStr) : [];
                 let eventsHtml = '';
                 if (eventsForDay.length > 0) {
-                    eventsHtml = eventsForDay.map(e => `<div class="event-item">${e.title}</div>`).join('');
+                    eventsHtml = eventsForDay.map(e => `<div class="event-item">${escapeHTML(e.title)}</div>`).join('');
                 }
 
                 // 日付とイベントを書き込み
@@ -482,16 +492,6 @@
                 case 'other': return 'その他';
                 default: return 'お知らせ';
             }
-        }
-
-        function escapeHTML(str) {
-            if (!str) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
         }
 
         function renderNoticeItemHTML(item) {
