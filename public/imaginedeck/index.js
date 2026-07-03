@@ -1,4 +1,6 @@
         let allNotices = []; // イベントリストをグローバルに保持（初期化エラー回避のため先頭に移動）
+        let upcomingNotices = [];
+        let pastNotices = [];
 
         function escapeHTML(str) {
             if (!str) return '';
@@ -480,8 +482,11 @@
            3. お知らせフィード（実データ）の処理
            ========================================= */
 
-        let currentNoticePage = 0;
-        let noticePages = []; // ページごとのアイテムの配列
+        let currentTab = 'upcoming'; // 'upcoming' or 'past'
+        let currentUpcomingPage = 0;
+        let currentPastPage = 0;
+        let upcomingPages = [];
+        let pastPages = [];
         let noticeAutoPlayInterval;
 
         function getTypeLabel(type) {
@@ -537,20 +542,11 @@
             return html;
         }
 
-        function calculateNoticePages() {
-            const wrapper = document.querySelector('.notice-wrapper');
-            const header = document.querySelector('.notice-header');
-            const listElement = document.getElementById('notice-list');
-            
-            if (!wrapper || !header || !listElement || allNotices.length === 0) return;
-
-            const availableHeight = wrapper.clientHeight - header.offsetHeight - 10; // 余裕を少し持たせる
-            
-            // 全アイテムの高さを計測
+        function paginateNotices(notices, availableHeight, listElement) {
             listElement.innerHTML = '';
             const itemHeights = [];
 
-            for (const item of allNotices) {
+            for (const item of notices) {
                 const li = document.createElement('li');
                 li.innerHTML = renderNoticeItemHTML(item);
                 li.style.visibility = 'hidden';
@@ -558,39 +554,54 @@
                 li.style.width = '100%'; // widthを指定して折り返しを正しく計算させる
                 listElement.appendChild(li);
 
-                // borderやpaddingを含めた高さを取得
                 itemHeights.push(li.getBoundingClientRect().height);
                 li.remove();
             }
 
-            noticePages = [];
+            const pages = [];
             let currentPage = [];
             let currentHeight = 0;
 
-            for (let i = 0; i < allNotices.length; i++) {
+            for (let i = 0; i < notices.length; i++) {
                 const h = itemHeights[i];
                 if (currentPage.length > 0 && currentHeight + h > availableHeight) {
-                    noticePages.push(currentPage);
-                    currentPage = [allNotices[i]];
+                    pages.push(currentPage);
+                    currentPage = [notices[i]];
                     currentHeight = h;
                 } else {
-                    currentPage.push(allNotices[i]);
+                    currentPage.push(notices[i]);
                     currentHeight += h;
                 }
             }
             if (currentPage.length > 0) {
-                noticePages.push(currentPage);
+                pages.push(currentPage);
             }
+            return pages;
+        }
 
-            // currentNoticePage の範囲を調整
-            if (currentNoticePage >= noticePages.length) {
-                currentNoticePage = 0;
+        function calculateNoticePages() {
+            const wrapper = document.querySelector('.notice-wrapper');
+            const header = document.querySelector('.notice-header');
+            const listElement = document.getElementById('notice-list');
+
+            if (!wrapper || !header || !listElement) return;
+
+            const availableHeight = wrapper.clientHeight - header.offsetHeight - 10; // 余裕を少し持たせる
+
+            upcomingPages = paginateNotices(upcomingNotices, availableHeight, listElement);
+            pastPages = paginateNotices(pastNotices, availableHeight, listElement);
+
+            if (currentUpcomingPage >= upcomingPages.length) {
+                currentUpcomingPage = 0;
+            }
+            if (currentPastPage >= pastPages.length) {
+                currentPastPage = 0;
             }
         }
 
         window.addEventListener('resize', () => {
             calculateNoticePages();
-            renderNoticePage(currentNoticePage);
+            renderNoticeTab(currentTab);
         });
 
         async function initFeeds() {
@@ -606,6 +617,9 @@
                 const oneYearAgoStr = `${oneYearAgo.getFullYear()}-${String(oneYearAgo.getMonth()+1).padStart(2, '0')}-${String(oneYearAgo.getDate()).padStart(2, '0')}`;
 
                 allNotices = [];
+                upcomingNotices = [];
+                pastNotices = [];
+
                 for (const item of data.merged) {
                     // 過去イベントの1年フィルター
                     if (item.kind === 'past' && item.date < oneYearAgoStr) {
@@ -615,17 +629,30 @@
                     // 既存のサイネージロジック用にフォーマットを変換
                     const formattedDate = item.date.replace(/-/g, '.');
 
-                    allNotices.push({
+                    const formattedItem = {
                         ...item,
                         date: formattedDate,       // YYYY.MM.DD形式
                         startTime: item.start,     // 既存のstartTimeプロパティにマップ
                         endTime: item.end,         // 既存のendTimeプロパティにマップ
                         exclusive: item.isReserved // 貸切フラグ
-                    });
+                    };
+
+                    allNotices.push(formattedItem);
+                    if (item.kind === 'past') {
+                        pastNotices.push(formattedItem);
+                    } else {
+                        upcomingNotices.push(formattedItem);
+                    }
                 }
 
                 calculateNoticePages();
-                renderNoticePage(0);
+                if (upcomingPages.length > 0) {
+                    renderNoticeTab('upcoming');
+                } else if (pastPages.length > 0) {
+                    renderNoticeTab('past');
+                } else {
+                    renderNoticeTab('upcoming');
+                }
                 startNoticeAutoPlay();
                 renderCalendar(currentYear, currentMonth);
 
@@ -634,38 +661,91 @@
             }
         }
 
-        function renderNoticePage(pageIndex) {
-            if (noticePages.length === 0) return;
+        function renderNoticeTab(tab) {
+            currentTab = tab;
 
-            const totalPages = noticePages.length;
+            // タブの見た目を更新
+            document.querySelectorAll('.notice-tab-btn').forEach(btn => {
+                if (btn.dataset.tab === tab) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
 
-            // ページ範囲をループさせる
-            if (pageIndex < 0) pageIndex = totalPages - 1;
-            if (pageIndex >= totalPages) pageIndex = 0;
-
-            currentNoticePage = pageIndex;
+            const pages = tab === 'upcoming' ? upcomingPages : pastPages;
+            const currentIndex = tab === 'upcoming' ? currentUpcomingPage : currentPastPage;
 
             const listElement = document.getElementById('notice-list');
             listElement.innerHTML = '';
 
-            const pageItems = noticePages[pageIndex];
+            if (pages.length === 0) {
+                document.getElementById('notice-page-indicator').textContent = `0 / 0`;
+                return;
+            }
 
+            const pageItems = pages[currentIndex] || [];
             pageItems.forEach(item => {
                 const li = document.createElement('li');
                 li.innerHTML = renderNoticeItemHTML(item);
                 listElement.appendChild(li);
             });
 
-            // ページインジケーターの更新
-            document.getElementById('notice-page-indicator').textContent = `${pageIndex + 1} / ${totalPages}`;
+            document.getElementById('notice-page-indicator').textContent = `${currentIndex + 1} / ${pages.length}`;
         }
 
         function nextNoticePage() {
-            renderNoticePage(currentNoticePage + 1);
+            if (currentTab === 'upcoming') {
+                if (upcomingPages.length === 0) {
+                    if (pastPages.length > 0) renderNoticeTab('past');
+                    return;
+                }
+                currentUpcomingPage++;
+                if (currentUpcomingPage >= upcomingPages.length) {
+                    currentUpcomingPage = 0;
+                    if (pastPages.length > 0) {
+                        renderNoticeTab('past');
+                    } else {
+                        renderNoticeTab('upcoming');
+                    }
+                } else {
+                    renderNoticeTab('upcoming');
+                }
+            } else {
+                if (pastPages.length === 0) {
+                    if (upcomingPages.length > 0) renderNoticeTab('upcoming');
+                    return;
+                }
+                currentPastPage++;
+                if (currentPastPage >= pastPages.length) {
+                    currentPastPage = 0;
+                    if (upcomingPages.length > 0) {
+                        renderNoticeTab('upcoming');
+                    } else {
+                        renderNoticeTab('past');
+                    }
+                } else {
+                    renderNoticeTab('past');
+                }
+            }
         }
 
         function prevNoticePage() {
-            renderNoticePage(currentNoticePage - 1);
+            if (currentTab === 'upcoming') {
+                if (upcomingPages.length === 0) return;
+                currentUpcomingPage--;
+                if (currentUpcomingPage < 0) {
+                    currentUpcomingPage = upcomingPages.length - 1;
+                }
+                renderNoticeTab('upcoming');
+            } else {
+                if (pastPages.length === 0) return;
+                currentPastPage--;
+                if (currentPastPage < 0) {
+                    currentPastPage = pastPages.length - 1;
+                }
+                renderNoticeTab('past');
+            }
         }
 
         function startNoticeAutoPlay() {
@@ -673,6 +753,15 @@
             // 8秒ごとに自動切り替え
             noticeAutoPlayInterval = setInterval(nextNoticePage, 8000);
         }
+
+        // タブ切り替えボタンのイベントリスナー
+        document.querySelectorAll('.notice-tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const tab = e.target.dataset.tab;
+                renderNoticeTab(tab);
+                startNoticeAutoPlay();
+            });
+        });
 
         // 手動切り替えボタンのイベントリスナー
         document.getElementById('prev-notice').addEventListener('click', () => {
