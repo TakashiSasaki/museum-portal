@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
         'indigo': { text: 'text-indigo-400', grad: 'from-indigo-500 to-indigo-800' }
     };
 
+    // Pre-calculate possible classes to remove to avoid expensive Array.from().filter() in loops
+    const textClassesToRemove = ['text-slate-500', ...Object.values(themeMap).map(t => t.text)];
+    const gradClassesToRemove = ['bg-slate-500', 'bg-gradient-to-br', ...Object.values(themeMap).flatMap(t => t.grad.split(' '))];
+
     const defaultIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white icon-glow"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
     const defaultPortalCards = [
         { position: 1, title: 'えひめ連携企業紹介', url: '/renkei/' },
@@ -38,12 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const iconContainer = slotElement.querySelector('.plasma-sphere');
         if (iconContainer) {
-            const iconTextClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('text-') && !['text-center'].includes(c));
-            iconContainer.classList.remove(...iconTextClasses);
+            iconContainer.classList.remove(...textClassesToRemove);
             iconContainer.classList.add('text-slate-500');
 
-            const gradClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('bg-') || c.startsWith('from-') || c.startsWith('to-'));
-            iconContainer.classList.remove(...gradClasses);
+            iconContainer.classList.remove(...gradClassesToRemove);
             iconContainer.classList.add('bg-slate-500');
             iconContainer.innerHTML = defaultIconSvg;
         }
@@ -178,8 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Apply theme text color to the plasma sphere to ensure currentColor glow works properly
                     if (iconContainer) {
-                        const iconTextClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('text-') && !['text-center'].includes(c));
-                        iconContainer.classList.remove(...iconTextClasses);
+                        iconContainer.classList.remove(...textClassesToRemove);
                         iconContainer.classList.add(theme.text);
                     }
 
@@ -193,8 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Update the gradient on the .plasma-sphere
                     if (iconContainer) {
                         // Remove existing gradients and backgrounds
-                        const gradClasses = Array.from(iconContainer.classList).filter(c => c.startsWith('bg-') || c.startsWith('from-') || c.startsWith('to-'));
-                        iconContainer.classList.remove(...gradClasses);
+                        iconContainer.classList.remove(...gradClassesToRemove);
 
                         // Add new gradients
                         iconContainer.classList.add('bg-gradient-to-br');
