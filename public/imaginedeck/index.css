@@ -603,10 +603,27 @@
             padding-bottom: 1cqw;
         }
 
-        .notice-title {
+        .notice-tabs {
+            display: flex;
+            gap: 1cqw;
+        }
+
+        .notice-tab-btn {
             font-size: 2.5cqw;
-            margin: 0;
-            color: #1a1a1a;
+            padding: 0.5cqw 2cqw;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background: #fff;
+            border-radius: 4px;
+            color: #666;
+            font-weight: normal;
+        }
+
+        .notice-tab-btn.active {
+            background: #333;
+            color: #fff;
+            border-color: #333;
+            font-weight: bold;
         }
 
         .pagination-controls {
