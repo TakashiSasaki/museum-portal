@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v26'; // Ignore signage feeds from caching
+const CORE_CACHE_VERSION = 'v27'; // Network-first watchdog assets
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -13,6 +13,11 @@ const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
 const API_CACHE_MAX_AGE_MS = 20 * 60 * 60 * 1000; // 20 hours
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
+
+const NETWORK_FIRST_ASSET_PATHS = new Set([
+  '/imaginedeck/watchdog.js',
+  '/imaginedeck/heartbeat.js'
+]);
 
 const CORE_ASSETS_TO_CACHE = [
   '/',
@@ -120,19 +125,30 @@ self.addEventListener('fetch', (evt) => {
     return;
   }
 
-  // Strategy 1: API requests for iframe content (Cache-First)
+  const requestUrl = new URL(request.url);
+
+  // Strategy 1: Watchdog protocol assets (Network-first, then stable cached fallback)
+  if (
+    requestUrl.origin === self.location.origin &&
+    NETWORK_FIRST_ASSET_PATHS.has(requestUrl.pathname)
+  ) {
+    evt.respondWith(handleNetworkFirstAssetRequest(request));
+    return;
+  }
+
+  // Strategy 2: API requests for iframe content (Cache-First)
   if (request.url.startsWith(API_URL)) {
     evt.respondWith(handleApiRequest(request));
     return;
   }
 
-  // Strategy 2: Navigation requests (Network-first, then cache, then offline page)
+  // Strategy 3: Navigation requests (Network-first, then cache, then offline page)
   if (request.mode === 'navigate') {
     evt.respondWith(handleNavigationRequest(request));
     return;
   }
 
-  // Strategy 3: Static assets (CSS, JS, Fonts, Images) (Stale-While-Revalidate)
+  // Strategy 4: Static assets (CSS, JS, Fonts, Images) (Stale-While-Revalidate)
   evt.respondWith(handleStaticAssetRequest(request, evt));
 });
 
@@ -154,6 +170,42 @@ async function createResponseWithFetchTime(response) {
     statusText: response.statusText,
     headers: headers
   });
+}
+
+/**
+ * Handles watchdog protocol assets with a "Network First" strategy.
+ * Stable cache keys avoid duplicate entries if a query string is added later.
+ */
+async function handleNetworkFirstAssetRequest(request) {
+  const requestUrl = new URL(request.url);
+  requestUrl.search = '';
+  requestUrl.hash = '';
+
+  const stableRequest = new Request(requestUrl.href);
+  const cache = await caches.open(CORE_CACHE_NAME);
+
+  try {
+    const networkResponse = await fetch(request, { cache: 'no-cache' });
+
+    if (networkResponse && networkResponse.status === 200) {
+      await cache.put(stableRequest, networkResponse.clone());
+    }
+
+    return networkResponse;
+  } catch (error) {
+    console.log(`[ServiceWorker] Network failed for watchdog asset. Trying cache for: ${request.url}`);
+    const cachedResponse = await cache.match(stableRequest);
+
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    return new Response(`Offline: Failed to fetch ${request.url}`, {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  }
 }
 
 /**
