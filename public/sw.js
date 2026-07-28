@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v27'; // Network-first watchdog assets
+const CORE_CACHE_VERSION = 'v28'; // Force fresh ImagineDeck monitored assets
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -17,6 +17,13 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   '/imaginedeck/watchdog.js',
   '/imaginedeck/heartbeat.js'
+]);
+
+const IMAGINEDECK_RELOAD_ASSET_PATHS = new Set([
+  '/imaginedeck/index.js',
+  '/imaginedeck/index.css',
+  '/imaginedeck/mergeFeeds.js',
+  '/imaginedeck/QR_458893.png'
 ]);
 
 const CORE_ASSETS_TO_CACHE = [
@@ -102,9 +109,12 @@ self.addEventListener('activate', (evt) => {
     }).then(() => {
       console.log('[ServiceWorker] Activation complete. Starting API pre-caching in background.');
       precacheApiContent();
+      // Complete clients.claim() before the worker reaches the activated state.
+      // This ensures an iframe reload after registration.update() is handled by
+      // the new cache-bypass rules rather than the previously active worker.
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (evt) => {
@@ -282,13 +292,21 @@ async function handleNavigationRequest(request) {
  * Handles static asset requests with a "Stale-While-Revalidate" strategy.
  * Returns the cached response immediately if available, while simultaneously
  * fetching from the network in the background to update the cache.
+ * ImagineDeck assets that the watchdog explicitly evicts bypass the HTTP cache
+ * so a fresh Cache API entry cannot be repopulated with stale browser-cache bytes.
  */
 async function handleStaticAssetRequest(request, evt) {
   const cachedResponse = await caches.match(request, { ignoreSearch: true });
 
   const networkFetchPromise = (async () => {
     try {
-      const networkResponse = await fetch(request);
+      const requestUrl = new URL(request.url);
+      const cacheMode =
+        requestUrl.origin === self.location.origin &&
+        IMAGINEDECK_RELOAD_ASSET_PATHS.has(requestUrl.pathname)
+          ? 'reload'
+          : 'default';
+      const networkResponse = await fetch(request, { cache: cacheMode });
       if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
         const cache = await caches.open(CORE_CACHE_NAME);
         await cache.put(request, networkResponse.clone());
