@@ -6,22 +6,73 @@
     const REQUIRED_PARENT_WATCHDOG_VERSION = 2;
     const PARENT_WATCHDOG_STARTUP_GRACE_MS = 10_000;
     const PARENT_RELOAD_RETRY_MS = 10 * 60_000;
+    const PARENT_RELOAD_IDLE_RETRY_MS = 5_000;
     const PARENT_RELOAD_STORAGE_KEY = 'imaginedeck-parent-watchdog-reload-at';
 
     let previousClockValue = null;
     let queuedStateHeartbeat = false;
     let parentWatchdogVerificationTimer = null;
+    let parentReloadIdleRetryTimer = null;
+    let parentReloadPendingReason = null;
 
-    function requestParentReload(reason) {
+    function clearParentReloadIdleRetry() {
+        if (parentReloadIdleRetryTimer !== null) {
+            clearTimeout(parentReloadIdleRetryTimer);
+            parentReloadIdleRetryTimer = null;
+        }
+    }
+
+    function scheduleParentReloadWhenIdle(delayMs = PARENT_RELOAD_IDLE_RETRY_MS) {
+        if (parentReloadIdleRetryTimer !== null) {
+            return;
+        }
+
+        parentReloadIdleRetryTimer = setTimeout(() => {
+            parentReloadIdleRetryTimer = null;
+            attemptParentReloadWhenIdle();
+        }, delayMs);
+    }
+
+    function attemptParentReloadWhenIdle() {
+        if (window.parent === window || parentReloadPendingReason === null) {
+            return;
+        }
+
+        const applicationState = readApplicationState({ allowUnchangedClock: true });
+        if (
+            applicationState.appReady !== true ||
+            applicationState.stopwatchRunning ||
+            applicationState.timerRunning
+        ) {
+            scheduleParentReloadWhenIdle();
+            console.info('[ImagineDeck Heartbeat] Parent watchdog migration deferred.', {
+                appReady: applicationState.appReady,
+                stopwatchRunning: applicationState.stopwatchRunning,
+                timerRunning: applicationState.timerRunning
+            });
+            return;
+        }
+
+        clearParentReloadIdleRetry();
+
         const now = Date.now();
         const previousReloadAt = Number(
             window.parent.sessionStorage.getItem(PARENT_RELOAD_STORAGE_KEY) || 0
         );
+        const elapsedSinceReload = now - previousReloadAt;
 
-        if (now - previousReloadAt <= PARENT_RELOAD_RETRY_MS) {
+        if (elapsedSinceReload <= PARENT_RELOAD_RETRY_MS) {
+            scheduleParentReloadWhenIdle(
+                Math.max(
+                    PARENT_RELOAD_IDLE_RETRY_MS,
+                    PARENT_RELOAD_RETRY_MS - elapsedSinceReload + 1
+                )
+            );
             return;
         }
 
+        const reason = parentReloadPendingReason;
+        parentReloadPendingReason = null;
         window.parent.sessionStorage.setItem(
             PARENT_RELOAD_STORAGE_KEY,
             String(now)
@@ -30,6 +81,11 @@
             reason
         });
         window.parent.location.reload();
+    }
+
+    function requestParentReload(reason) {
+        parentReloadPendingReason = reason;
+        attemptParentReloadWhenIdle();
     }
 
     function clearParentWatchdogVerification() {
@@ -72,6 +128,8 @@
             const actualVersion = window.parent.__IMAGINEDECK_WATCHDOG_VERSION__;
             if (actualVersion === REQUIRED_PARENT_WATCHDOG_VERSION) {
                 clearParentWatchdogVerification();
+                parentReloadPendingReason = null;
+                clearParentReloadIdleRetry();
                 return true;
             }
 
@@ -170,6 +228,7 @@
         queueMicrotask(() => {
             queuedStateHeartbeat = false;
             sendHeartbeat({ allowUnchangedClock: true });
+            attemptParentReloadWhenIdle();
         });
     }
 
@@ -207,7 +266,11 @@
     window.addEventListener('load', () => {
         observeRunStateChanges();
         sendHeartbeat({ allowUnchangedClock: true });
+        attemptParentReloadWhenIdle();
     }, { once: true });
 
-    setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+    setInterval(() => {
+        sendHeartbeat();
+        attemptParentReloadWhenIdle();
+    }, HEARTBEAT_INTERVAL_MS);
 })();
