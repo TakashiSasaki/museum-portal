@@ -1,11 +1,21 @@
 (() => {
     'use strict';
 
+    const WATCHDOG_VERSION = 2;
     const CHECK_INTERVAL_MS = 60_000;
     const HEARTBEAT_TIMEOUT_MS = 150_000;
     const RELOAD_WINDOW_MS = 10 * 60_000;
     const MAX_RELOADS_PER_WINDOW = 3;
     const APP_URL = './app.html';
+    const ASSET_SIGNATURE_STORAGE_KEY = 'imaginedeck-loaded-asset-signature';
+    const MONITORED_ASSET_URLS = [
+        './app.html',
+        './index.js',
+        './index.css',
+        './mergeFeeds.js'
+    ];
+
+    window.__IMAGINEDECK_WATCHDOG_VERSION__ = WATCHDOG_VERSION;
 
     const frame = document.getElementById('imaginedeck-frame');
     if (!frame) {
@@ -17,6 +27,12 @@
     let lastCheckAt = Date.now();
     let reloadHistory = [];
     let reloadSuppressed = false;
+    let reloadInProgress = false;
+    let childStateKnown = false;
+    let childBusy = false;
+    let loadedAssetSignature = sessionStorage.getItem(ASSET_SIGNATURE_STORAGE_KEY);
+    let pendingAssetSignature = null;
+    let updateCheckInProgress = false;
 
     function pruneReloadHistory(now) {
         reloadHistory = reloadHistory.filter(
@@ -43,7 +59,68 @@
         console.info('[ImagineDeck Watchdog] Heartbeat grace period granted.', { reason });
     }
 
-    function reloadFrame(reason) {
+    async function refreshServiceWorker() {
+        if (!('serviceWorker' in navigator)) {
+            return;
+        }
+
+        try {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (!registration) {
+                return;
+            }
+
+            await registration.update();
+
+            const candidate = registration.installing || registration.waiting;
+            if (!candidate || candidate.state === 'activated') {
+                return;
+            }
+
+            await new Promise(resolve => {
+                const timeoutId = setTimeout(resolve, 10_000);
+                candidate.addEventListener('statechange', () => {
+                    if (candidate.state === 'activated' || candidate.state === 'redundant') {
+                        clearTimeout(timeoutId);
+                        resolve();
+                    }
+                });
+            });
+        } catch (error) {
+            console.warn('[ImagineDeck Watchdog] Service Worker update check failed.', error);
+        }
+    }
+
+    async function evictMonitoredAssetCaches() {
+        if (!('caches' in window)) {
+            return;
+        }
+
+        try {
+            const cacheNames = await caches.keys();
+            const cacheEvictionUrls = MONITORED_ASSET_URLS.filter(
+                assetUrl => assetUrl !== APP_URL
+            );
+            const assetRequests = cacheEvictionUrls.map(
+                assetUrl => new Request(new URL(assetUrl, window.location.href).href)
+            );
+
+            await Promise.all(cacheNames.map(async cacheName => {
+                const cache = await caches.open(cacheName);
+                await Promise.all(assetRequests.map(
+                    request => cache.delete(request, { ignoreSearch: true })
+                ));
+            }));
+        } catch (error) {
+            console.warn('[ImagineDeck Watchdog] Failed to evict monitored asset caches.', error);
+        }
+    }
+
+    async function reloadFrame(reason, options = {}) {
+        if (reloadInProgress) {
+            return;
+        }
+
         const now = Date.now();
         pruneReloadHistory(now);
 
@@ -58,13 +135,119 @@
             return;
         }
 
+        reloadInProgress = true;
         reloadHistory.push(now);
         lastHealthyHeartbeatAt = now;
+        childStateKnown = false;
+
+        if (options.refreshAssets === true) {
+            await refreshServiceWorker();
+            await evictMonitoredAssetCaches();
+        }
+
+        if (options.assetSignature) {
+            loadedAssetSignature = options.assetSignature;
+            sessionStorage.setItem(
+                ASSET_SIGNATURE_STORAGE_KEY,
+                options.assetSignature
+            );
+            pendingAssetSignature = null;
+        }
 
         const stableAppUrl = new URL(APP_URL, window.location.href).href;
 
         console.warn('[ImagineDeck Watchdog] Reloading iframe.', { reason });
         frame.src = stableAppUrl;
+        reloadInProgress = false;
+    }
+
+    async function applyPendingUpdateIfSafe() {
+        if (
+            !pendingAssetSignature ||
+            reloadInProgress ||
+            !childStateKnown ||
+            childBusy
+        ) {
+            return;
+        }
+
+        const signatureToLoad = pendingAssetSignature;
+        await reloadFrame('server content update detected', {
+            refreshAssets: true,
+            assetSignature: signatureToLoad
+        });
+    }
+
+    function assetValidatorFromResponse(assetUrl, response) {
+        const etag = response.headers.get('etag');
+        if (etag) {
+            return `${assetUrl}|etag:${etag}`;
+        }
+
+        const lastModified = response.headers.get('last-modified');
+        if (lastModified) {
+            const contentLength = response.headers.get('content-length') || '';
+            return `${assetUrl}|last-modified:${lastModified}|length:${contentLength}`;
+        }
+
+        throw new Error(`No ETag or Last-Modified header for ${assetUrl}`);
+    }
+
+    async function fetchAssetValidator(assetUrl) {
+        const url = new URL(assetUrl, window.location.href);
+        const response = await fetch(url.href, {
+            method: 'HEAD',
+            cache: 'no-store'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HEAD ${url.pathname} returned ${response.status}`);
+        }
+
+        return assetValidatorFromResponse(assetUrl, response);
+    }
+
+    async function readServerAssetSignature() {
+        const validators = await Promise.all(
+            MONITORED_ASSET_URLS.map(fetchAssetValidator)
+        );
+        return validators.join('\n');
+    }
+
+    async function checkForContentUpdate() {
+        if (updateCheckInProgress) {
+            return;
+        }
+
+        updateCheckInProgress = true;
+        try {
+            const currentSignature = await readServerAssetSignature();
+
+            if (loadedAssetSignature === null) {
+                pendingAssetSignature = currentSignature;
+                console.info(
+                    '[ImagineDeck Watchdog] Initial server asset signature recorded; synchronizing iframe assets.',
+                    { deferred: !childStateKnown || childBusy }
+                );
+                await applyPendingUpdateIfSafe();
+                return;
+            }
+
+            if (currentSignature === loadedAssetSignature) {
+                pendingAssetSignature = null;
+                return;
+            }
+
+            pendingAssetSignature = currentSignature;
+            console.info('[ImagineDeck Watchdog] Server content update detected.', {
+                deferred: !childStateKnown || childBusy
+            });
+            await applyPendingUpdateIfSafe();
+        } catch (error) {
+            console.warn('[ImagineDeck Watchdog] Server content update check failed.', error);
+        } finally {
+            updateCheckInProgress = false;
+        }
     }
 
     window.addEventListener('message', event => {
@@ -86,12 +269,16 @@
         }
 
         lastHealthyHeartbeatAt = Date.now();
+        childStateKnown = true;
+        childBusy = Boolean(message.stopwatchRunning) || Boolean(message.timerRunning);
 
         if (reloadSuppressed) {
             reloadSuppressed = false;
             reloadHistory = [];
             console.info('[ImagineDeck Watchdog] Healthy heartbeat restored.');
         }
+
+        void applyPendingUpdateIfSafe();
     });
 
     frame.addEventListener('load', () => {
@@ -125,7 +312,12 @@
 
         const silenceMs = now - lastHealthyHeartbeatAt;
         if (silenceMs > HEARTBEAT_TIMEOUT_MS) {
-            reloadFrame(`healthy heartbeat missing for ${silenceMs} ms`);
+            void reloadFrame(`healthy heartbeat missing for ${silenceMs} ms`);
         }
+    }, CHECK_INTERVAL_MS);
+
+    void checkForContentUpdate();
+    setInterval(() => {
+        void checkForContentUpdate();
     }, CHECK_INTERVAL_MS);
 })();
