@@ -2,9 +2,12 @@
     'use strict';
 
     const WATCHDOG_VERSION = 2;
+    const REQUIRED_CHILD_HEARTBEAT_VERSION = 2;
+    const LEGACY_CHILD_HEARTBEAT_VERSION = 1;
     const CHECK_INTERVAL_MS = 60_000;
     const HEARTBEAT_TIMEOUT_MS = 150_000;
     const CHILD_STATE_CONFIRM_TIMEOUT_MS = 2_000;
+    const LEGACY_CHILD_CONFIRM_DELAY_MS = 1_200;
     const RELOAD_WINDOW_MS = 10 * 60_000;
     const MAX_RELOADS_PER_WINDOW = 3;
     const APP_URL = './app.html';
@@ -31,6 +34,8 @@
     let reloadInProgress = false;
     let childStateKnown = false;
     let childBusy = false;
+    let childHeartbeatVersion = null;
+    let childMigrationPending = false;
     let loadedAssetSignature = sessionStorage.getItem(ASSET_SIGNATURE_STORAGE_KEY);
     let pendingAssetSignature = null;
     let updateCheckInProgress = false;
@@ -63,6 +68,12 @@
     function requestFreshChildState(reason) {
         return new Promise(resolve => {
             let settled = false;
+            let requestTimerId = null;
+            const requestDelayMs =
+                childHeartbeatVersion !== null &&
+                childHeartbeatVersion < REQUIRED_CHILD_HEARTBEAT_VERSION
+                    ? LEGACY_CHILD_CONFIRM_DELAY_MS
+                    : 0;
 
             const finish = received => {
                 if (settled) {
@@ -70,17 +81,23 @@
                 }
                 settled = true;
                 clearTimeout(timeoutId);
+                if (requestTimerId !== null) {
+                    clearTimeout(requestTimerId);
+                }
                 childStateWaiters.delete(finish);
                 resolve(received);
             };
 
             const timeoutId = setTimeout(
                 () => finish(false),
-                CHILD_STATE_CONFIRM_TIMEOUT_MS
+                CHILD_STATE_CONFIRM_TIMEOUT_MS + requestDelayMs
             );
 
             childStateWaiters.add(finish);
-            requestImmediateHeartbeat(reason);
+            requestTimerId = setTimeout(
+                () => requestImmediateHeartbeat(reason),
+                requestDelayMs
+            );
         });
     }
 
@@ -187,7 +204,8 @@
                         {
                             stateConfirmed,
                             childStateKnown,
-                            childBusy
+                            childBusy,
+                            childHeartbeatVersion
                         }
                     );
                     return false;
@@ -205,6 +223,7 @@
             lastHealthyHeartbeatAt = commitTime;
             childStateKnown = false;
             childBusy = false;
+            childHeartbeatVersion = null;
 
             if (options.assetSignature) {
                 loadedAssetSignature = options.assetSignature;
@@ -226,8 +245,9 @@
     }
 
     async function applyPendingUpdateIfSafe() {
+        const assetUpdatePending = Boolean(pendingAssetSignature);
         if (
-            !pendingAssetSignature ||
+            (!assetUpdatePending && !childMigrationPending) ||
             reloadInProgress ||
             !childStateKnown ||
             childBusy
@@ -236,10 +256,16 @@
         }
 
         const signatureToLoad = pendingAssetSignature;
-        await reloadFrame('server content update detected', {
+        const reason = assetUpdatePending && childMigrationPending
+            ? 'server content update and child heartbeat migration detected'
+            : assetUpdatePending
+                ? 'server content update detected'
+                : 'legacy child heartbeat protocol detected';
+
+        await reloadFrame(reason, {
             refreshAssets: true,
             requireIdle: true,
-            assetSignature: signatureToLoad
+            assetSignature: signatureToLoad || undefined
         });
     }
 
@@ -332,6 +358,7 @@
 
             if (currentSignature === loadedAssetSignature) {
                 pendingAssetSignature = null;
+                await applyPendingUpdateIfSafe();
                 return;
             }
 
@@ -360,8 +387,36 @@
             return;
         }
 
+        const reportedVersion = Number(message.protocolVersion);
+        childHeartbeatVersion = Number.isInteger(reportedVersion)
+            ? reportedVersion
+            : LEGACY_CHILD_HEARTBEAT_VERSION;
+        childMigrationPending =
+            childHeartbeatVersion < REQUIRED_CHILD_HEARTBEAT_VERSION;
+
         if (message.appReady !== true) {
-            console.warn('[ImagineDeck Watchdog] Unhealthy heartbeat received.', message);
+            const legacyStateOnlyConfirmation =
+                childHeartbeatVersion < REQUIRED_CHILD_HEARTBEAT_VERSION &&
+                childStateWaiters.size > 0 &&
+                childStateKnown &&
+                Date.now() - lastHealthyHeartbeatAt < HEARTBEAT_TIMEOUT_MS &&
+                typeof message.stopwatchRunning === 'boolean' &&
+                typeof message.timerRunning === 'boolean';
+
+            if (legacyStateOnlyConfirmation) {
+                childBusy = message.stopwatchRunning || message.timerRunning;
+                resolveChildStateWaiters(true);
+                console.info(
+                    '[ImagineDeck Watchdog] Accepted legacy heartbeat as state-only confirmation.',
+                    { childBusy, childHeartbeatVersion }
+                );
+                return;
+            }
+
+            console.warn('[ImagineDeck Watchdog] Unhealthy heartbeat received.', {
+                ...message,
+                interpretedProtocolVersion: childHeartbeatVersion
+            });
             return;
         }
 
@@ -369,6 +424,13 @@
         childStateKnown = true;
         childBusy = Boolean(message.stopwatchRunning) || Boolean(message.timerRunning);
         resolveChildStateWaiters(true);
+
+        if (childMigrationPending) {
+            console.info('[ImagineDeck Watchdog] Legacy child heartbeat protocol detected.', {
+                childHeartbeatVersion,
+                deferred: childBusy
+            });
+        }
 
         if (reloadSuppressed) {
             reloadSuppressed = false;
