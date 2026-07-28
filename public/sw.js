@@ -175,26 +175,63 @@ function stableImagineDeckRequest(pathOrUrl) {
 
 async function migrateImagineDeckFallbacks() {
   const assetCache = await caches.open(IMAGINEDECK_ASSET_CACHE_NAME);
-  const cacheNames = await caches.keys();
+  const cacheNames = (await caches.keys()).filter(cacheName =>
+    cacheName !== IMAGINEDECK_ASSET_CACHE_NAME &&
+    cacheName !== IMAGINEDECK_STAGING_CACHE_NAME
+  );
+  const atomicPaths = [...ATOMIC_IMAGINEDECK_ASSET_PATHS];
 
-  for (const pathname of NETWORK_FIRST_ASSET_PATHS) {
-    const stableRequest = stableImagineDeckRequest(pathname);
-    if (await assetCache.match(stableRequest)) {
-      continue;
-    }
+  const activeAtomicResponses = await Promise.all(
+    atomicPaths.map(pathname =>
+      assetCache.match(stableImagineDeckRequest(pathname))
+    )
+  );
 
+  if (!activeAtomicResponses.every(Boolean)) {
+    // Never retain a partially migrated iframe asset set.
+    await Promise.all(
+      atomicPaths.map(pathname =>
+        assetCache.delete(stableImagineDeckRequest(pathname))
+      )
+    );
+
+    // Seed the active set only when one legacy cache contains every member.
     for (const cacheName of cacheNames) {
-      if (
-        cacheName === IMAGINEDECK_ASSET_CACHE_NAME ||
-        cacheName === IMAGINEDECK_STAGING_CACHE_NAME
-      ) {
+      const legacyCache = await caches.open(cacheName);
+      const candidateResponses = await Promise.all(
+        atomicPaths.map(pathname =>
+          legacyCache.match(
+            stableImagineDeckRequest(pathname),
+            { ignoreSearch: true }
+          )
+        )
+      );
+
+      if (!candidateResponses.every(Boolean)) {
         continue;
       }
 
-      const cache = await caches.open(cacheName);
-      const existingResponse = await cache.match(stableRequest, { ignoreSearch: true });
+      for (let index = 0; index < atomicPaths.length; index += 1) {
+        await assetCache.put(
+          stableImagineDeckRequest(atomicPaths[index]),
+          candidateResponses[index].clone()
+        );
+      }
+      break;
+    }
+  }
+
+  // watchdog.js is independent of the iframe asset set.
+  const watchdogRequest = stableImagineDeckRequest('/imaginedeck/watchdog.js');
+  if (!(await assetCache.match(watchdogRequest))) {
+    for (const cacheName of cacheNames) {
+      const legacyCache = await caches.open(cacheName);
+      const existingResponse = await legacyCache.match(
+        watchdogRequest,
+        { ignoreSearch: true }
+      );
       if (existingResponse) {
-        await assetCache.put(stableRequest, existingResponse.clone());
+        await assetCache.put(watchdogRequest, existingResponse.clone());
         break;
       }
     }
