@@ -149,7 +149,10 @@
             requestParentReload(
                 `incompatible watchdog version: actual=${String(actualVersion)}, expected=${String(expectedVersion)}`
             );
-            return false;
+            // Keep sending the same heartbeat shape while the safe parent reload is
+            // deferred. Cached v1 watchdogs ignore the extra protocolVersion field
+            // and still need heartbeats to avoid their own timeout reload path.
+            return true;
         } catch (error) {
             console.warn('[ImagineDeck Heartbeat] Parent watchdog version check failed.', error);
             return true;
