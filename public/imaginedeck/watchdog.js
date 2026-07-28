@@ -12,7 +12,9 @@
         './app.html',
         './index.js',
         './index.css',
-        './mergeFeeds.js'
+        './mergeFeeds.js',
+        './heartbeat.js',
+        './QR_458893.png'
     ];
 
     window.__IMAGINEDECK_WATCHDOG_VERSION__ = WATCHDOG_VERSION;
