@@ -3,13 +3,14 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v31'; // Coherent ImagineDeck active-set delivery
+const CORE_CACHE_VERSION = 'v32'; // Atomic normal-load reconciliation
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
 const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
 const IMAGINEDECK_ASSET_CACHE_NAME = 'museum-portal-imaginedeck-assets-v1';
 const IMAGINEDECK_STAGING_CACHE_NAME = 'museum-portal-imaginedeck-staging-v1';
+const IMAGINEDECK_NORMAL_STAGING_CACHE_NAME = 'museum-portal-imaginedeck-normal-staging-v1';
 
 const API_CACHE_MAX_AGE_MS = 20 * 60 * 60 * 1000; // 20 hours
 
@@ -66,6 +67,8 @@ const CORE_ASSETS_TO_CACHE = [
   '/renkei/index.css',
   '/renkei/index.js'
 ];
+
+let normalAssetSetRefreshPromise = null;
 
 // 2. Event Listeners
 // --------------------------------------------------
@@ -177,7 +180,8 @@ async function migrateImagineDeckFallbacks() {
   const assetCache = await caches.open(IMAGINEDECK_ASSET_CACHE_NAME);
   const cacheNames = (await caches.keys()).filter(cacheName =>
     cacheName !== IMAGINEDECK_ASSET_CACHE_NAME &&
-    cacheName !== IMAGINEDECK_STAGING_CACHE_NAME
+    cacheName !== IMAGINEDECK_STAGING_CACHE_NAME &&
+    cacheName !== IMAGINEDECK_NORMAL_STAGING_CACHE_NAME
   );
   const atomicPaths = [...ATOMIC_IMAGINEDECK_ASSET_PATHS];
 
@@ -188,14 +192,12 @@ async function migrateImagineDeckFallbacks() {
   );
 
   if (!activeAtomicResponses.every(Boolean)) {
-    // Never retain a partially migrated iframe asset set.
     await Promise.all(
       atomicPaths.map(pathname =>
         assetCache.delete(stableImagineDeckRequest(pathname))
       )
     );
 
-    // Seed the active set only when one legacy cache contains every member.
     for (const cacheName of cacheNames) {
       const legacyCache = await caches.open(cacheName);
       const candidateResponses = await Promise.all(
@@ -221,7 +223,6 @@ async function migrateImagineDeckFallbacks() {
     }
   }
 
-  // watchdog.js is independent of the iframe asset set.
   const watchdogRequest = stableImagineDeckRequest('/imaginedeck/watchdog.js');
   if (!(await assetCache.match(watchdogRequest))) {
     for (const cacheName of cacheNames) {
@@ -238,9 +239,6 @@ async function migrateImagineDeckFallbacks() {
   }
 }
 
-/**
- * Creates a new Response object with a custom X-Cache-Fetched-At header.
- */
 async function createResponseWithFetchTime(response) {
   const headers = new Headers(response.headers);
   headers.append('X-Cache-Fetched-At', Date.now().toString());
@@ -290,17 +288,85 @@ async function responsesRepresentSameAsset(networkResponse, cachedResponse) {
   return networkHash === cachedHash;
 }
 
+async function rollbackAtomicAssetSet(activeCache, previousEntries) {
+  for (const entry of previousEntries) {
+    if (entry.response) {
+      await activeCache.put(entry.request, entry.response.clone());
+    } else {
+      await activeCache.delete(entry.request);
+    }
+  }
+}
+
+async function promoteNormalStagingCache() {
+  const stagingCache = await caches.open(IMAGINEDECK_NORMAL_STAGING_CACHE_NAME);
+  const activeCache = await caches.open(IMAGINEDECK_ASSET_CACHE_NAME);
+  const entries = await Promise.all(
+    [...ATOMIC_IMAGINEDECK_ASSET_PATHS].map(async pathname => {
+      const request = stableImagineDeckRequest(pathname);
+      const [stagedResponse, previousResponse] = await Promise.all([
+        stagingCache.match(request),
+        activeCache.match(request)
+      ]);
+
+      if (!stagedResponse) {
+        throw new Error(`Normal staging response missing for ${pathname}`);
+      }
+
+      return { request, stagedResponse, previousResponse };
+    })
+  );
+  const previousEntries = entries.map(entry => ({
+    request: entry.request,
+    response: entry.previousResponse
+  }));
+
+  try {
+    for (const entry of entries) {
+      await activeCache.put(entry.request, entry.stagedResponse.clone());
+    }
+  } catch (error) {
+    await rollbackAtomicAssetSet(activeCache, previousEntries);
+    throw error;
+  }
+}
+
+async function refreshAtomicAssetSetFromNetwork() {
+  if (normalAssetSetRefreshPromise) {
+    return normalAssetSetRefreshPromise;
+  }
+
+  normalAssetSetRefreshPromise = (async () => {
+    await caches.delete(IMAGINEDECK_NORMAL_STAGING_CACHE_NAME);
+    const stagingCache = await caches.open(IMAGINEDECK_NORMAL_STAGING_CACHE_NAME);
+
+    try {
+      await Promise.all(
+        [...ATOMIC_IMAGINEDECK_ASSET_PATHS].map(async pathname => {
+          const request = stableImagineDeckRequest(pathname);
+          const response = await fetch(request, { cache: 'reload' });
+          if (!response || response.status !== 200) {
+            throw new Error(`Atomic normal refresh for ${pathname} returned ${response?.status ?? 'no response'}`);
+          }
+          await stagingCache.put(request, response.clone());
+        })
+      );
+
+      await promoteNormalStagingCache();
+    } finally {
+      await caches.delete(IMAGINEDECK_NORMAL_STAGING_CACHE_NAME);
+    }
+  })().finally(() => {
+    normalAssetSetRefreshPromise = null;
+  });
+
+  return normalAssetSetRefreshPromise;
+}
+
 /**
- * Handles monitored ImagineDeck resources with network-first delivery.
- *
- * The six iframe assets in ATOMIC_IMAGINEDECK_ASSET_PATHS are never written
- * into the active fallback cache by ordinary requests. Only the watchdog may
- * promote a complete, signature-verified set. If an ordinary network response
- * differs from the active cached response, the active response is served until
- * the watchdog promotes the complete new set.
- *
- * watchdog.js is independent of the iframe asset set and may update its own
- * fallback entry after a successful normal network response.
+ * Handles monitored ImagineDeck resources with coherent active-set delivery.
+ * Ordinary requests may trigger a complete atomic refresh, but never write one
+ * iframe asset at a time into the active cache.
  */
 async function handleNetworkFirstAssetRequest(request) {
   const requestUrl = new URL(request.url);
@@ -324,7 +390,13 @@ async function handleNetworkFirstAssetRequest(request) {
 
       if (isAtomicAsset) {
         if (!cachedResponse) {
-          return networkResponse;
+          try {
+            await refreshAtomicAssetSetFromNetwork();
+            return (await cache.match(stableRequest)) || networkResponse;
+          } catch (error) {
+            console.warn('[ServiceWorker] Failed to establish a complete initial ImagineDeck asset set.', error);
+            return networkResponse;
+          }
         }
 
         const sameAsset = await responsesRepresentSameAsset(
@@ -333,10 +405,16 @@ async function handleNetworkFirstAssetRequest(request) {
         );
 
         if (!sameAsset) {
-          console.info(
-            `[ServiceWorker] Holding the active ImagineDeck asset set until atomic promotion: ${requestUrl.pathname}`
-          );
-          return cachedResponse;
+          try {
+            await refreshAtomicAssetSetFromNetwork();
+            return (await cache.match(stableRequest)) || cachedResponse;
+          } catch (error) {
+            console.warn(
+              `[ServiceWorker] Complete ImagineDeck asset refresh failed; retaining active set for ${requestUrl.pathname}.`,
+              error
+            );
+            return cachedResponse;
+          }
         }
 
         return networkResponse;
@@ -374,9 +452,6 @@ async function handleNetworkFirstAssetRequest(request) {
   }
 }
 
-/**
- * Handles API requests for iframe content with a cache-first strategy.
- */
 async function handleApiRequest(request) {
   const cache = await caches.open(API_CACHE_NAME);
   const cachedResponse = await cache.match(request);
@@ -421,9 +496,6 @@ async function handleApiRequest(request) {
   }
 }
 
-/**
- * Handles navigation requests with a network-first strategy.
- */
 async function handleNavigationRequest(request) {
   try {
     const networkResponse = await fetch(request, { cache: 'no-cache' });
@@ -442,9 +514,6 @@ async function handleNavigationRequest(request) {
   }
 }
 
-/**
- * Handles other static asset requests with a stale-while-revalidate strategy.
- */
 async function handleStaticAssetRequest(request, evt) {
   const cachedResponse = await caches.match(request, { ignoreSearch: true });
 
@@ -478,9 +547,6 @@ async function handleStaticAssetRequest(request, evt) {
 // 4. Utility Functions
 // --------------------------------------------------
 
-/**
- * Fetches and caches the first 10 pages of API content in the background.
- */
 async function precacheApiContent() {
   console.log('[ServiceWorker] Starting background API pre-caching for pages 1-10.');
   const cache = await caches.open(API_CACHE_NAME);
