@@ -1,6 +1,7 @@
 (() => {
     'use strict';
 
+    const HEARTBEAT_PROTOCOL_VERSION = 2;
     const HEARTBEAT_INTERVAL_MS = 60_000;
     const REQUIRED_PARENT_WATCHDOG_VERSION = 2;
     const PARENT_WATCHDOG_STARTUP_GRACE_MS = 10_000;
@@ -152,6 +153,7 @@
         window.parent.postMessage(
             {
                 type: 'imaginedeck-heartbeat',
+                protocolVersion: HEARTBEAT_PROTOCOL_VERSION,
                 timestamp: Date.now(),
                 ...readApplicationState(options)
             },
