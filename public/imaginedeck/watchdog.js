@@ -14,6 +14,9 @@
     const APP_URL = './app.html';
     const ASSET_SIGNATURE_STORAGE_KEY = 'imaginedeck-loaded-asset-signature';
     const REQUIRE_NETWORK_HEADER = 'X-ImagineDeck-Require-Network';
+    const STAGE_ONLY_HEADER = 'X-ImagineDeck-Stage-Only';
+    const ACTIVE_ASSET_CACHE_NAME = 'museum-portal-imaginedeck-assets-v1';
+    const STAGING_ASSET_CACHE_NAME = 'museum-portal-imaginedeck-staging-v1';
     const MONITORED_ASSET_URLS = [
         './app.html',
         './index.js',
@@ -33,6 +36,7 @@
     let lastCheckAt = Date.now();
     let reloadHistory = [];
     let reloadSuppressed = false;
+    let reloadSuppressedSignature = null;
     let reloadInProgress = false;
     let childStateKnown = false;
     let childBusy = false;
@@ -51,6 +55,29 @@
         reloadHistory = reloadHistory.filter(
             timestamp => now - timestamp < RELOAD_WINDOW_MS
         );
+    }
+
+    function clearReloadSuppression(reason) {
+        if (!reloadSuppressed && reloadHistory.length === 0) {
+            reloadSuppressedSignature = null;
+            return;
+        }
+
+        reloadSuppressed = false;
+        reloadSuppressedSignature = null;
+        reloadHistory = [];
+        console.info('[ImagineDeck Watchdog] Automatic reload suppression cleared.', { reason });
+    }
+
+    function suppressReloads(reason, signature = null) {
+        if (!reloadSuppressed) {
+            console.error(
+                '[ImagineDeck Watchdog] Automatic reload suppressed after repeated failures.',
+                { reason, signature, reloadHistory: [...reloadHistory] }
+            );
+        }
+        reloadSuppressed = true;
+        reloadSuppressedSignature = signature;
     }
 
     function requestImmediateHeartbeat(reason) {
@@ -162,6 +189,13 @@
         }
     }
 
+    function stableAssetRequest(assetUrl) {
+        const url = new URL(assetUrl, window.location.href);
+        url.search = '';
+        url.hash = '';
+        return new Request(url.href, { credentials: 'same-origin' });
+    }
+
     function assetValidatorFromResponse(assetUrl, response) {
         const etag = response.headers.get('etag');
         if (etag) {
@@ -239,21 +273,89 @@
         return validators.join('\n');
     }
 
-    async function fetchAssetFromNetwork(assetUrl) {
+    async function fetchAssetForStaging(assetUrl) {
         const url = new URL(assetUrl, window.location.href);
         const response = await fetch(url.href, {
             method: 'GET',
             cache: 'no-store',
             headers: {
-                [REQUIRE_NETWORK_HEADER]: '1'
+                [REQUIRE_NETWORK_HEADER]: '1',
+                [STAGE_ONLY_HEADER]: '1'
             }
         });
 
         if (!response.ok) {
-            throw new Error(`Network preparation for ${url.pathname} returned ${response.status}`);
+            throw new Error(`Network staging for ${url.pathname} returned ${response.status}`);
         }
 
-        return responseSignature(assetUrl, response);
+        const responseForCache = response.clone();
+        const signature = await responseSignature(assetUrl, response);
+        return { assetUrl, response: responseForCache, signature };
+    }
+
+    async function rollbackActiveAssetCache(activeCache, previousEntries) {
+        await Promise.all(previousEntries.map(async entry => {
+            if (entry.response) {
+                await activeCache.put(entry.request, entry.response.clone());
+            } else {
+                await activeCache.delete(entry.request);
+            }
+        }));
+    }
+
+    async function promoteStagedAssetSet(stagedEntries) {
+        await caches.delete(STAGING_ASSET_CACHE_NAME);
+        const stagingCache = await caches.open(STAGING_ASSET_CACHE_NAME);
+
+        try {
+            await Promise.all(stagedEntries.map(entry =>
+                stagingCache.put(stableAssetRequest(entry.assetUrl), entry.response.clone())
+            ));
+
+            const activeCache = await caches.open(ACTIVE_ASSET_CACHE_NAME);
+            const promotionEntries = await Promise.all(
+                MONITORED_ASSET_URLS.map(async assetUrl => {
+                    const request = stableAssetRequest(assetUrl);
+                    const [stagedResponse, previousResponse] = await Promise.all([
+                        stagingCache.match(request),
+                        activeCache.match(request)
+                    ]);
+
+                    if (!stagedResponse) {
+                        throw new Error(`Staged response missing for ${assetUrl}`);
+                    }
+
+                    return {
+                        request,
+                        stagedResponse,
+                        previousResponse
+                    };
+                })
+            );
+
+            const previousEntries = promotionEntries.map(entry => ({
+                request: entry.request,
+                response: entry.previousResponse
+            }));
+
+            try {
+                for (const entry of promotionEntries) {
+                    await activeCache.put(entry.request, entry.stagedResponse.clone());
+                }
+            } catch (error) {
+                try {
+                    await rollbackActiveAssetCache(activeCache, previousEntries);
+                } catch (rollbackError) {
+                    console.error(
+                        '[ImagineDeck Watchdog] Failed to roll back a partial asset promotion.',
+                        rollbackError
+                    );
+                }
+                throw error;
+            }
+        } finally {
+            await caches.delete(STAGING_ASSET_CACHE_NAME);
+        }
     }
 
     async function prepareMonitoredAssets(expectedSignature) {
@@ -262,23 +364,24 @@
             throw new Error('The portal Service Worker is not controlling the page.');
         }
 
-        const preparedValidators = await Promise.all(
-            MONITORED_ASSET_URLS.map(fetchAssetFromNetwork)
+        // Stage-only requests never mutate the active fallback cache. Only after
+        // every response succeeds and the complete signature matches do we
+        // promote the coherent set, with rollback if promotion itself fails.
+        const stagedEntries = await Promise.all(
+            MONITORED_ASSET_URLS.map(fetchAssetForStaging)
         );
-        const preparedSignature = preparedValidators.join('\n');
+        const preparedSignature = stagedEntries.map(entry => entry.signature).join('\n');
 
         if (preparedSignature !== expectedSignature) {
             pendingAssetSignature = preparedSignature;
             console.info(
-                '[ImagineDeck Watchdog] Server assets changed while preparing the update; deferring reload.',
-                {
-                    expectedSignature,
-                    preparedSignature
-                }
+                '[ImagineDeck Watchdog] Server assets changed while staging the update; deferring reload.',
+                { expectedSignature, preparedSignature }
             );
             return null;
         }
 
+        await promoteStagedAssetSet(stagedEntries);
         return preparedSignature;
     }
 
@@ -344,6 +447,7 @@
         confirmationSignature = null;
         confirmationLoadSeen = false;
         clearAssetConfirmationTimer();
+        clearReloadSuppression('asset signature confirmed by the reloaded iframe');
 
         console.info('[ImagineDeck Watchdog] Loaded asset signature confirmed by the iframe.', {
             assetStatus: message.assetStatus
@@ -360,13 +464,10 @@
         pruneReloadHistory(now);
 
         if (reloadHistory.length >= MAX_RELOADS_PER_WINDOW) {
-            if (!reloadSuppressed) {
-                console.error(
-                    '[ImagineDeck Watchdog] Automatic reload suppressed after repeated failures.',
-                    { reason, reloadHistory: [...reloadHistory] }
-                );
-            }
-            reloadSuppressed = true;
+            suppressReloads(
+                reason,
+                options.assetSignature || pendingAssetSignature || null
+            );
             return false;
         }
 
@@ -380,7 +481,7 @@
                     preparedSignature = await prepareMonitoredAssets(options.assetSignature);
                 } catch (error) {
                     console.warn(
-                        '[ImagineDeck Watchdog] Failed to prepare monitored assets; retaining the existing cached version.',
+                        '[ImagineDeck Watchdog] Failed to stage a complete monitored asset set; retaining the active cached set.',
                         error
                     );
                     return false;
@@ -415,7 +516,10 @@
             const commitTime = Date.now();
             pruneReloadHistory(commitTime);
             if (reloadHistory.length >= MAX_RELOADS_PER_WINDOW) {
-                reloadSuppressed = true;
+                suppressReloads(
+                    reason,
+                    preparedSignature || options.assetSignature || pendingAssetSignature || null
+                );
                 return false;
             }
 
@@ -449,6 +553,7 @@
         const assetUpdatePending = Boolean(pendingAssetSignature);
         if (
             (!assetUpdatePending && !childMigrationPending) ||
+            reloadSuppressed ||
             reloadInProgress ||
             confirmationSignature !== null ||
             !childStateKnown ||
@@ -471,6 +576,16 @@
         });
     }
 
+    function resetSuppressionForNewSignature(currentSignature) {
+        if (
+            reloadSuppressed &&
+            reloadSuppressedSignature !== null &&
+            currentSignature !== reloadSuppressedSignature
+        ) {
+            clearReloadSuppression('a different server asset signature was detected');
+        }
+    }
+
     async function checkForContentUpdate() {
         if (updateCheckInProgress) {
             return;
@@ -479,12 +594,13 @@
         updateCheckInProgress = true;
         try {
             const currentSignature = await readServerAssetSignature();
+            resetSuppressionForNewSignature(currentSignature);
 
             if (loadedAssetSignature === null) {
                 pendingAssetSignature = currentSignature;
                 console.info(
                     '[ImagineDeck Watchdog] Initial server asset signature recorded; synchronizing iframe assets.',
-                    { deferred: !childStateKnown || childBusy }
+                    { deferred: !childStateKnown || childBusy || reloadSuppressed }
                 );
                 await applyPendingUpdateIfSafe();
                 return;
@@ -498,6 +614,9 @@
                 ) {
                     abandonAssetConfirmation('server assets returned to the loaded signature');
                 }
+                if (reloadSuppressed && reloadSuppressedSignature !== null) {
+                    clearReloadSuppression('server assets returned to the confirmed signature');
+                }
                 await applyPendingUpdateIfSafe();
                 return;
             }
@@ -507,7 +626,8 @@
                 deferred:
                     !childStateKnown ||
                     childBusy ||
-                    confirmationSignature !== null
+                    confirmationSignature !== null ||
+                    reloadSuppressed
             });
             await applyPendingUpdateIfSafe();
         } catch (error) {
@@ -589,17 +709,21 @@
             }
         }
 
-        if (reloadSuppressed) {
-            reloadSuppressed = false;
-            reloadHistory = [];
-            console.info('[ImagineDeck Watchdog] Healthy heartbeat restored.');
+        // A healthy heartbeat clears failure suppression only when no server
+        // asset signature remains pending or under confirmation. This prevents
+        // invalid-but-executable assets from restarting an endless reload cycle.
+        if (
+            reloadSuppressed &&
+            pendingAssetSignature === null &&
+            confirmationSignature === null
+        ) {
+            clearReloadSuppression('healthy heartbeat restored without a pending asset update');
         }
 
         void applyPendingUpdateIfSafe();
     });
 
     frame.addEventListener('load', () => {
-        // Allow a complete heartbeat timeout after every iframe navigation.
         grantHeartbeatGrace('iframe loaded');
         beginAssetConfirmationAfterLoad();
     });
@@ -634,7 +758,6 @@
         }
     }, CHECK_INTERVAL_MS);
 
-    // This marker certifies that the complete v2 watchdog script initialized.
     window.__IMAGINEDECK_WATCHDOG_VERSION__ = WATCHDOG_VERSION;
 
     void checkForContentUpdate();
