@@ -190,21 +190,53 @@
             return `${assetUrl}|last-modified:${lastModified}|length:${contentLength}`;
         }
 
-        throw new Error(`No ETag or Last-Modified header for ${assetUrl}`);
+        return null;
     }
 
-    async function fetchAssetValidator(assetUrl) {
-        const url = new URL(assetUrl, window.location.href);
+    async function sha256Hex(arrayBuffer) {
+        const digest = await crypto.subtle.digest('SHA-256', arrayBuffer);
+        return Array.from(new Uint8Array(digest), byte =>
+            byte.toString(16).padStart(2, '0')
+        ).join('');
+    }
+
+    async function fetchAssetContentHash(assetUrl, url) {
         const response = await fetch(url.href, {
-            method: 'HEAD',
+            method: 'GET',
             cache: 'no-store'
         });
 
         if (!response.ok) {
-            throw new Error(`HEAD ${url.pathname} returned ${response.status}`);
+            throw new Error(`GET ${url.pathname} returned ${response.status}`);
         }
 
-        return assetValidatorFromResponse(assetUrl, response);
+        const hash = await sha256Hex(await response.arrayBuffer());
+        return `${assetUrl}|sha256:${hash}`;
+    }
+
+    async function fetchAssetValidator(assetUrl) {
+        const url = new URL(assetUrl, window.location.href);
+
+        try {
+            const response = await fetch(url.href, {
+                method: 'HEAD',
+                cache: 'no-store'
+            });
+
+            if (response.ok) {
+                const validator = assetValidatorFromResponse(assetUrl, response);
+                if (validator) {
+                    return validator;
+                }
+            }
+        } catch (error) {
+            console.warn(
+                `[ImagineDeck Watchdog] HEAD update check failed for ${url.pathname}; falling back to content hash.`,
+                error
+            );
+        }
+
+        return fetchAssetContentHash(assetUrl, url);
     }
 
     async function readServerAssetSignature() {
