@@ -64,6 +64,18 @@
         );
     }
 
+    window.addEventListener('message', event => {
+        if (
+            event.origin !== window.location.origin ||
+            event.source !== window.parent ||
+            event.data?.type !== 'imaginedeck-heartbeat-request'
+        ) {
+            return;
+        }
+
+        sendHeartbeat();
+    });
+
     window.addEventListener('load', sendHeartbeat, { once: true });
     setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 })();
