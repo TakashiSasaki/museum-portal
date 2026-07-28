@@ -149,14 +149,50 @@
             requestParentReload(
                 `incompatible watchdog version: actual=${String(actualVersion)}, expected=${String(expectedVersion)}`
             );
-            // Keep sending the same heartbeat shape while the safe parent reload is
-            // deferred. Cached v1 watchdogs ignore the extra protocolVersion field
-            // and still need heartbeats to avoid their own timeout reload path.
+            // Keep sending backward-compatible heartbeats while the safe parent
+            // reload is deferred. Cached v1 watchdogs ignore protocolVersion.
             return true;
         } catch (error) {
             console.warn('[ImagineDeck Heartbeat] Parent watchdog version check failed.', error);
             return true;
         }
+    }
+
+    function readAssetState() {
+        const stylesheet = document.querySelector('link[rel="stylesheet"][href="index.css"]');
+        const qrImage = document.querySelector('.qr-wrapper-horizontal img');
+        const indexScriptReady =
+            typeof updateClock === 'function' &&
+            typeof initFeeds === 'function' &&
+            typeof nextNoticePage === 'function' &&
+            typeof isSwRunning === 'boolean' &&
+            typeof isTimerRunning === 'boolean';
+        const mergeFeedsScriptReady =
+            typeof mergeFeeds === 'function' &&
+            typeof loadMergedEvents === 'function';
+        const stylesheetReady = Boolean(stylesheet?.sheet);
+        const qrImageReady = Boolean(
+            qrImage &&
+            qrImage.complete &&
+            qrImage.naturalWidth > 0 &&
+            qrImage.naturalHeight > 0
+        );
+
+        return {
+            assetsReady:
+                indexScriptReady &&
+                mergeFeedsScriptReady &&
+                stylesheetReady &&
+                qrImageReady,
+            assetStatus: {
+                indexScriptReady,
+                mergeFeedsScriptReady,
+                stylesheetReady,
+                qrImageReady
+            },
+            indexScriptReady,
+            mergeFeedsScriptReady
+        };
     }
 
     function readApplicationState(options = {}) {
@@ -180,27 +216,31 @@
                 typeof isSwRunning === 'boolean' && isSwRunning;
             const timerRunning =
                 typeof isTimerRunning === 'boolean' && isTimerRunning;
+            const assetState = readAssetState();
 
             const appReady =
                 document.readyState === 'complete' &&
-                typeof updateClock === 'function' &&
-                typeof initFeeds === 'function' &&
-                typeof nextNoticePage === 'function' &&
-                typeof isSwRunning === 'boolean' &&
-                typeof isTimerRunning === 'boolean' &&
+                assetState.indexScriptReady &&
+                assetState.mergeFeedsScriptReady &&
                 clockInitialized &&
                 clockProgressing;
 
             return {
                 appReady,
                 stopwatchRunning,
-                timerRunning
+                timerRunning,
+                assetsReady: assetState.assetsReady,
+                assetStatus: assetState.assetStatus
             };
         } catch (error) {
             return {
                 appReady: false,
                 stopwatchRunning: false,
                 timerRunning: false,
+                assetsReady: false,
+                assetStatus: {
+                    stateReadError: error instanceof Error ? error.message : String(error)
+                },
                 stateReadError: error instanceof Error ? error.message : String(error)
             };
         }
@@ -211,12 +251,23 @@
             return;
         }
 
+        // ensureParentWatchdogVersion() can synchronously schedule a migration
+        // and read the application state. Reuse an unchanged clock as healthy
+        // during that compatibility window instead of performing a second
+        // synchronous clock-progress check that would mark the heartbeat unhealthy.
+        const applicationState = readApplicationState({
+            ...options,
+            allowUnchangedClock:
+                options.allowUnchangedClock === true ||
+                parentReloadPendingReason !== null
+        });
+
         window.parent.postMessage(
             {
                 type: 'imaginedeck-heartbeat',
                 protocolVersion: HEARTBEAT_PROTOCOL_VERSION,
                 timestamp: Date.now(),
-                ...readApplicationState(options)
+                ...applicationState
             },
             window.location.origin
         );
