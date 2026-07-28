@@ -14,6 +14,7 @@
     }
 
     let lastHealthyHeartbeatAt = Date.now();
+    let lastCheckAt = Date.now();
     let reloadHistory = [];
     let reloadSuppressed = false;
 
@@ -21,6 +22,25 @@
         reloadHistory = reloadHistory.filter(
             timestamp => now - timestamp < RELOAD_WINDOW_MS
         );
+    }
+
+    function requestImmediateHeartbeat(reason) {
+        frame.contentWindow?.postMessage(
+            {
+                type: 'imaginedeck-heartbeat-request',
+                timestamp: Date.now(),
+                reason
+            },
+            window.location.origin
+        );
+    }
+
+    function grantHeartbeatGrace(reason) {
+        const now = Date.now();
+        lastHealthyHeartbeatAt = now;
+        lastCheckAt = now;
+        requestImmediateHeartbeat(reason);
+        console.info('[ImagineDeck Watchdog] Heartbeat grace period granted.', { reason });
     }
 
     function reloadFrame(reason) {
@@ -76,11 +96,34 @@
 
     frame.addEventListener('load', () => {
         // Allow a complete heartbeat timeout after every iframe navigation.
-        lastHealthyHeartbeatAt = Date.now();
+        grantHeartbeatGrace('iframe loaded');
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            grantHeartbeatGrace('page became visible');
+        }
+    });
+
+    window.addEventListener('pageshow', () => {
+        grantHeartbeatGrace('page shown');
     });
 
     setInterval(() => {
-        const silenceMs = Date.now() - lastHealthyHeartbeatAt;
+        const now = Date.now();
+        const checkGapMs = now - lastCheckAt;
+        lastCheckAt = now;
+
+        if (document.visibilityState !== 'visible') {
+            return;
+        }
+
+        if (checkGapMs > HEARTBEAT_TIMEOUT_MS) {
+            grantHeartbeatGrace(`watchdog resumed after ${checkGapMs} ms`);
+            return;
+        }
+
+        const silenceMs = now - lastHealthyHeartbeatAt;
         if (silenceMs > HEARTBEAT_TIMEOUT_MS) {
             reloadFrame(`healthy heartbeat missing for ${silenceMs} ms`);
         }
