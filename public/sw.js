@@ -4,17 +4,20 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v29'; // Network-first ImagineDeck monitored assets
+const CORE_CACHE_VERSION = 'v30'; // Atomic ImagineDeck asset-set staging
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
 const API_CACHE_NAME = `museum-portal-api-${API_CACHE_VERSION}`;
+const IMAGINEDECK_ASSET_CACHE_NAME = 'museum-portal-imaginedeck-assets-v1';
+const IMAGINEDECK_STAGING_CACHE_NAME = 'museum-portal-imaginedeck-staging-v1';
 
 const API_CACHE_MAX_AGE_MS = 20 * 60 * 60 * 1000; // 20 hours
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
 
 const IMAGINEDECK_REQUIRE_NETWORK_HEADER = 'X-ImagineDeck-Require-Network';
+const IMAGINEDECK_STAGE_ONLY_HEADER = 'X-ImagineDeck-Stage-Only';
 
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   '/imaginedeck/app.html',
@@ -75,7 +78,6 @@ self.addEventListener('install', (evt) => {
             const request = assetUrl.startsWith('http')
               ? new Request(assetUrl, { mode: 'no-cors' })
               : new Request(assetUrl);
-            // Use { cache: 'reload' } to ensure we get fresh content from the server
             const response = await fetch(request, { cache: 'reload' });
             if (response.status === 200 || response.type === 'opaque') {
               await cache.put(assetUrl, response);
@@ -95,33 +97,35 @@ self.addEventListener('install', (evt) => {
 
 self.addEventListener('activate', (evt) => {
   console.log('[ServiceWorker] Activate event started.');
-  const currentCaches = [CORE_CACHE_NAME, API_CACHE_NAME];
+  const currentCaches = [
+    CORE_CACHE_NAME,
+    API_CACHE_NAME,
+    IMAGINEDECK_ASSET_CACHE_NAME
+  ];
+
   evt.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
+    migrateImagineDeckFallbacks()
+      .then(() => caches.keys())
+      .then((cacheNames) => Promise.all(
         cacheNames.map((cacheName) => {
           if (!currentCaches.includes(cacheName)) {
             console.log(`[ServiceWorker] Deleting old cache: ${cacheName}`);
             return caches.delete(cacheName);
           }
+          return undefined;
         })
-      );
-    }).then(() => {
-      console.log('[ServiceWorker] Activation complete. Starting API pre-caching in background.');
-      precacheApiContent();
-      // Complete clients.claim() before activation settles so a following
-      // ImagineDeck reload is controlled by these network-first rules.
-      return self.clients.claim();
-    })
+      ))
+      .then(() => {
+        console.log('[ServiceWorker] Activation complete. Starting API pre-caching in background.');
+        precacheApiContent();
+        return self.clients.claim();
+      })
   );
 });
 
 self.addEventListener('fetch', (evt) => {
   const { request } = evt;
 
-  // Strategy 0: Ignore external APIs and feeds that should not be cached by SW.
-  // Let the Firebase SDK handle googleapis with its own offline logic.
-  // Skip imagine deck feeds so they always bypass and load fresh.
   if (
     request.url.includes('googleapis.com') ||
     request.url.includes('imaginedeck.igsrr.org/feed/')
@@ -129,14 +133,12 @@ self.addEventListener('fetch', (evt) => {
     return;
   }
 
-  // Let non-GET requests pass through without interference.
   if (request.method !== 'GET') {
     return;
   }
 
   const requestUrl = new URL(request.url);
 
-  // Strategy 1: ImagineDeck monitored assets (Network-first, stable cache fallback)
   if (
     requestUrl.origin === self.location.origin &&
     NETWORK_FIRST_ASSET_PATHS.has(requestUrl.pathname)
@@ -145,25 +147,56 @@ self.addEventListener('fetch', (evt) => {
     return;
   }
 
-  // Strategy 2: API requests for iframe content (Cache-First)
   if (request.url.startsWith(API_URL)) {
     evt.respondWith(handleApiRequest(request));
     return;
   }
 
-  // Strategy 3: Navigation requests (Network-first, then cache, then offline page)
   if (request.mode === 'navigate') {
     evt.respondWith(handleNavigationRequest(request));
     return;
   }
 
-  // Strategy 4: Static assets (CSS, JS, Fonts, Images) (Stale-While-Revalidate)
   evt.respondWith(handleStaticAssetRequest(request, evt));
 });
 
-
 // 3. Caching Strategy Implementations
 // --------------------------------------------------
+
+function stableImagineDeckRequest(pathOrUrl) {
+  const url = new URL(pathOrUrl, self.location.origin);
+  url.search = '';
+  url.hash = '';
+  return new Request(url.href, { credentials: 'same-origin' });
+}
+
+async function migrateImagineDeckFallbacks() {
+  const assetCache = await caches.open(IMAGINEDECK_ASSET_CACHE_NAME);
+  const cacheNames = await caches.keys();
+
+  for (const pathname of NETWORK_FIRST_ASSET_PATHS) {
+    const stableRequest = stableImagineDeckRequest(pathname);
+    if (await assetCache.match(stableRequest)) {
+      continue;
+    }
+
+    for (const cacheName of cacheNames) {
+      if (
+        cacheName === IMAGINEDECK_ASSET_CACHE_NAME ||
+        cacheName === IMAGINEDECK_STAGING_CACHE_NAME
+      ) {
+        continue;
+      }
+
+      const cache = await caches.open(cacheName);
+      const existingResponse = await cache.match(stableRequest, { ignoreSearch: true });
+      if (existingResponse) {
+        await assetCache.put(stableRequest, existingResponse.clone());
+        break;
+      }
+    }
+  }
+}
 
 /**
  * Creates a new Response object with a custom X-Cache-Fetched-At header.
@@ -181,38 +214,36 @@ async function createResponseWithFetchTime(response) {
 }
 
 /**
- * Handles all monitored ImagineDeck resources with a "Network First" strategy.
- * The watchdog can require a real network response while staging a coherent
- * asset set; normal browser requests retain the stable cached fallback.
+ * Handles monitored ImagineDeck resources with network-first delivery.
+ * Stage-only requests return real network bytes without mutating the active
+ * asset-set cache. The watchdog promotes a complete staged set atomically.
  */
 async function handleNetworkFirstAssetRequest(request) {
-  const requestUrl = new URL(request.url);
-  requestUrl.search = '';
-  requestUrl.hash = '';
-
-  const stableRequest = new Request(requestUrl.href, {
-    credentials: 'same-origin'
-  });
-  const cache = await caches.open(CORE_CACHE_NAME);
+  const stableRequest = stableImagineDeckRequest(request.url);
+  const cache = await caches.open(IMAGINEDECK_ASSET_CACHE_NAME);
   const requireNetwork =
     request.headers.get(IMAGINEDECK_REQUIRE_NETWORK_HEADER) === '1';
+  const stageOnly =
+    request.headers.get(IMAGINEDECK_STAGE_ONLY_HEADER) === '1';
 
   try {
     const networkResponse = await fetch(request, { cache: 'reload' });
 
     if (networkResponse && networkResponse.status === 200) {
-      await cache.put(stableRequest, networkResponse.clone());
+      if (!stageOnly) {
+        await cache.put(stableRequest, networkResponse.clone());
+      }
       return networkResponse;
     }
 
-    if (requireNetwork) {
+    if (requireNetwork || stageOnly) {
       return networkResponse;
     }
 
     const cachedResponse = await cache.match(stableRequest);
     return cachedResponse || networkResponse;
   } catch (error) {
-    if (requireNetwork) {
+    if (requireNetwork || stageOnly) {
       return new Response(`Network required: Failed to fetch ${request.url}`, {
         status: 503,
         statusText: 'Service Unavailable',
@@ -271,7 +302,7 @@ async function handleApiRequest(request) {
     return networkResponse;
   } catch (error) {
     if (cachedResponse) {
-      console.log(`[ServiceWorker] Network failed for API. Returning expired cache.`);
+      console.log('[ServiceWorker] Network failed for API. Returning expired cache.');
       return cachedResponse;
     }
     return new Response('Content failed to load. Please check your connection.', {
