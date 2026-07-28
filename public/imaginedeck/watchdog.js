@@ -4,6 +4,7 @@
     const WATCHDOG_VERSION = 2;
     const CHECK_INTERVAL_MS = 60_000;
     const HEARTBEAT_TIMEOUT_MS = 150_000;
+    const CHILD_STATE_CONFIRM_TIMEOUT_MS = 2_000;
     const RELOAD_WINDOW_MS = 10 * 60_000;
     const MAX_RELOADS_PER_WINDOW = 3;
     const APP_URL = './app.html';
@@ -16,8 +17,6 @@
         './heartbeat.js',
         './QR_458893.png'
     ];
-
-    window.__IMAGINEDECK_WATCHDOG_VERSION__ = WATCHDOG_VERSION;
 
     const frame = document.getElementById('imaginedeck-frame');
     if (!frame) {
@@ -35,6 +34,7 @@
     let loadedAssetSignature = sessionStorage.getItem(ASSET_SIGNATURE_STORAGE_KEY);
     let pendingAssetSignature = null;
     let updateCheckInProgress = false;
+    const childStateWaiters = new Set();
 
     function pruneReloadHistory(now) {
         reloadHistory = reloadHistory.filter(
@@ -51,6 +51,37 @@
             },
             window.location.origin
         );
+    }
+
+    function resolveChildStateWaiters(received) {
+        for (const resolve of childStateWaiters) {
+            resolve(received);
+        }
+        childStateWaiters.clear();
+    }
+
+    function requestFreshChildState(reason) {
+        return new Promise(resolve => {
+            let settled = false;
+
+            const finish = received => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                clearTimeout(timeoutId);
+                childStateWaiters.delete(finish);
+                resolve(received);
+            };
+
+            const timeoutId = setTimeout(
+                () => finish(false),
+                CHILD_STATE_CONFIRM_TIMEOUT_MS
+            );
+
+            childStateWaiters.add(finish);
+            requestImmediateHeartbeat(reason);
+        });
     }
 
     function grantHeartbeatGrace(reason) {
@@ -120,7 +151,7 @@
 
     async function reloadFrame(reason, options = {}) {
         if (reloadInProgress) {
-            return;
+            return false;
         }
 
         const now = Date.now();
@@ -134,33 +165,64 @@
                 );
             }
             reloadSuppressed = true;
-            return;
+            return false;
         }
 
         reloadInProgress = true;
-        reloadHistory.push(now);
-        lastHealthyHeartbeatAt = now;
-        childStateKnown = false;
 
-        if (options.refreshAssets === true) {
-            await refreshServiceWorker();
-            await evictMonitoredAssetCaches();
+        try {
+            if (options.refreshAssets === true) {
+                await refreshServiceWorker();
+                await evictMonitoredAssetCaches();
+            }
+
+            if (options.requireIdle === true) {
+                const stateConfirmed = await requestFreshChildState(
+                    'confirm idle state before applying content update'
+                );
+
+                if (!stateConfirmed || !childStateKnown || childBusy) {
+                    console.info(
+                        '[ImagineDeck Watchdog] Content update reload deferred after final state check.',
+                        {
+                            stateConfirmed,
+                            childStateKnown,
+                            childBusy
+                        }
+                    );
+                    return false;
+                }
+            }
+
+            const commitTime = Date.now();
+            pruneReloadHistory(commitTime);
+            if (reloadHistory.length >= MAX_RELOADS_PER_WINDOW) {
+                reloadSuppressed = true;
+                return false;
+            }
+
+            reloadHistory.push(commitTime);
+            lastHealthyHeartbeatAt = commitTime;
+            childStateKnown = false;
+            childBusy = false;
+
+            if (options.assetSignature) {
+                loadedAssetSignature = options.assetSignature;
+                sessionStorage.setItem(
+                    ASSET_SIGNATURE_STORAGE_KEY,
+                    options.assetSignature
+                );
+                pendingAssetSignature = null;
+            }
+
+            const stableAppUrl = new URL(APP_URL, window.location.href).href;
+
+            console.warn('[ImagineDeck Watchdog] Reloading iframe.', { reason });
+            frame.src = stableAppUrl;
+            return true;
+        } finally {
+            reloadInProgress = false;
         }
-
-        if (options.assetSignature) {
-            loadedAssetSignature = options.assetSignature;
-            sessionStorage.setItem(
-                ASSET_SIGNATURE_STORAGE_KEY,
-                options.assetSignature
-            );
-            pendingAssetSignature = null;
-        }
-
-        const stableAppUrl = new URL(APP_URL, window.location.href).href;
-
-        console.warn('[ImagineDeck Watchdog] Reloading iframe.', { reason });
-        frame.src = stableAppUrl;
-        reloadInProgress = false;
     }
 
     async function applyPendingUpdateIfSafe() {
@@ -176,6 +238,7 @@
         const signatureToLoad = pendingAssetSignature;
         await reloadFrame('server content update detected', {
             refreshAssets: true,
+            requireIdle: true,
             assetSignature: signatureToLoad
         });
     }
@@ -305,6 +368,7 @@
         lastHealthyHeartbeatAt = Date.now();
         childStateKnown = true;
         childBusy = Boolean(message.stopwatchRunning) || Boolean(message.timerRunning);
+        resolveChildStateWaiters(true);
 
         if (reloadSuppressed) {
             reloadSuppressed = false;
@@ -349,6 +413,9 @@
             void reloadFrame(`healthy heartbeat missing for ${silenceMs} ms`);
         }
     }, CHECK_INTERVAL_MS);
+
+    // This marker certifies that the complete v2 watchdog script initialized.
+    window.__IMAGINEDECK_WATCHDOG_VERSION__ = WATCHDOG_VERSION;
 
     void checkForContentUpdate();
     setInterval(() => {
