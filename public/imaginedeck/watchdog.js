@@ -41,11 +41,10 @@
         reloadHistory.push(now);
         lastHealthyHeartbeatAt = now;
 
-        const url = new URL(APP_URL, window.location.href);
-        url.searchParams.set('watchdogReload', String(now));
+        const stableAppUrl = new URL(APP_URL, window.location.href).href;
 
         console.warn('[ImagineDeck Watchdog] Reloading iframe.', { reason });
-        frame.src = url.href;
+        frame.src = stableAppUrl;
     }
 
     window.addEventListener('message', event => {
