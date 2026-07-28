@@ -40,7 +40,85 @@
         allow="autoplay; fullscreen"
         loading="eager"
     ></iframe>
-    <script src="watchdog.js" defer></script>
+    <script>
+        (() => {
+            'use strict';
+
+            const SERVICE_WORKER_URL = '/sw.js';
+            const SERVICE_WORKER_SCOPE = '/';
+            const ACTIVATION_TIMEOUT_MS = 10_000;
+            const CONTROL_TIMEOUT_MS = 5_000;
+
+            function waitForWorkerActivation(worker) {
+                if (!worker || worker.state === 'activated' || worker.state === 'redundant') {
+                    return Promise.resolve();
+                }
+
+                return new Promise(resolve => {
+                    const timeoutId = setTimeout(resolve, ACTIVATION_TIMEOUT_MS);
+                    worker.addEventListener('statechange', () => {
+                        if (worker.state === 'activated' || worker.state === 'redundant') {
+                            clearTimeout(timeoutId);
+                            resolve();
+                        }
+                    });
+                });
+            }
+
+            function waitForController() {
+                if (navigator.serviceWorker.controller) {
+                    return Promise.resolve();
+                }
+
+                return new Promise(resolve => {
+                    const timeoutId = setTimeout(resolve, CONTROL_TIMEOUT_MS);
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        clearTimeout(timeoutId);
+                        resolve();
+                    }, { once: true });
+                });
+            }
+
+            async function ensurePortalServiceWorker() {
+                if (!('serviceWorker' in navigator)) {
+                    return;
+                }
+
+                const registration = await navigator.serviceWorker.register(
+                    SERVICE_WORKER_URL,
+                    {
+                        scope: SERVICE_WORKER_SCOPE,
+                        updateViaCache: 'none'
+                    }
+                );
+
+                await registration.update();
+                await waitForWorkerActivation(
+                    registration.installing || registration.waiting
+                );
+                await waitForController();
+            }
+
+            function loadWatchdog() {
+                const script = document.createElement('script');
+                script.src = './watchdog.js';
+                script.async = false;
+                script.addEventListener('error', () => {
+                    console.error('[ImagineDeck Bootstrap] Failed to load watchdog.js.');
+                });
+                document.body.append(script);
+            }
+
+            ensurePortalServiceWorker()
+                .catch(error => {
+                    console.warn(
+                        '[ImagineDeck Bootstrap] Service Worker registration or update failed.',
+                        error
+                    );
+                })
+                .finally(loadWatchdog);
+        })();
+    </script>
 </body>
 
 </html>
