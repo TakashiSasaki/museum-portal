@@ -4,7 +4,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v28'; // Force fresh ImagineDeck monitored assets
+const CORE_CACHE_VERSION = 'v29'; // Network-first ImagineDeck monitored assets
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -14,15 +14,15 @@ const API_CACHE_MAX_AGE_MS = 20 * 60 * 60 * 1000; // 20 hours
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
 
-const NETWORK_FIRST_ASSET_PATHS = new Set([
-  '/imaginedeck/watchdog.js',
-  '/imaginedeck/heartbeat.js'
-]);
+const IMAGINEDECK_REQUIRE_NETWORK_HEADER = 'X-ImagineDeck-Require-Network';
 
-const IMAGINEDECK_RELOAD_ASSET_PATHS = new Set([
+const NETWORK_FIRST_ASSET_PATHS = new Set([
+  '/imaginedeck/app.html',
   '/imaginedeck/index.js',
   '/imaginedeck/index.css',
   '/imaginedeck/mergeFeeds.js',
+  '/imaginedeck/heartbeat.js',
+  '/imaginedeck/watchdog.js',
   '/imaginedeck/QR_458893.png'
 ]);
 
@@ -109,9 +109,8 @@ self.addEventListener('activate', (evt) => {
     }).then(() => {
       console.log('[ServiceWorker] Activation complete. Starting API pre-caching in background.');
       precacheApiContent();
-      // Complete clients.claim() before the worker reaches the activated state.
-      // This ensures an iframe reload after registration.update() is handled by
-      // the new cache-bypass rules rather than the previously active worker.
+      // Complete clients.claim() before activation settles so a following
+      // ImagineDeck reload is controlled by these network-first rules.
       return self.clients.claim();
     })
   );
@@ -130,14 +129,14 @@ self.addEventListener('fetch', (evt) => {
     return;
   }
 
-  // Let non-GET requests (like potential future POSTs) pass through without interference.
+  // Let non-GET requests pass through without interference.
   if (request.method !== 'GET') {
     return;
   }
 
   const requestUrl = new URL(request.url);
 
-  // Strategy 1: Watchdog protocol assets (Network-first, then stable cached fallback)
+  // Strategy 1: ImagineDeck monitored assets (Network-first, stable cache fallback)
   if (
     requestUrl.origin === self.location.origin &&
     NETWORK_FIRST_ASSET_PATHS.has(requestUrl.pathname)
@@ -173,7 +172,6 @@ async function createResponseWithFetchTime(response) {
   const headers = new Headers(response.headers);
   headers.append('X-Cache-Fetched-At', Date.now().toString());
 
-  // We need to read the body as a Blob to create a new Response
   const body = await response.blob();
   return new Response(body, {
     status: response.status,
@@ -183,19 +181,24 @@ async function createResponseWithFetchTime(response) {
 }
 
 /**
- * Handles watchdog protocol assets with a "Network First" strategy.
- * Stable cache keys avoid duplicate entries if a query string is added later.
+ * Handles all monitored ImagineDeck resources with a "Network First" strategy.
+ * The watchdog can require a real network response while staging a coherent
+ * asset set; normal browser requests retain the stable cached fallback.
  */
 async function handleNetworkFirstAssetRequest(request) {
   const requestUrl = new URL(request.url);
   requestUrl.search = '';
   requestUrl.hash = '';
 
-  const stableRequest = new Request(requestUrl.href);
+  const stableRequest = new Request(requestUrl.href, {
+    credentials: 'same-origin'
+  });
   const cache = await caches.open(CORE_CACHE_NAME);
+  const requireNetwork =
+    request.headers.get(IMAGINEDECK_REQUIRE_NETWORK_HEADER) === '1';
 
   try {
-    const networkResponse = await fetch(request, { cache: 'no-cache' });
+    const networkResponse = await fetch(request, { cache: 'reload' });
 
     if (networkResponse && networkResponse.status === 200) {
       await cache.put(stableRequest, networkResponse.clone());
@@ -203,7 +206,15 @@ async function handleNetworkFirstAssetRequest(request) {
 
     return networkResponse;
   } catch (error) {
-    console.log(`[ServiceWorker] Network failed for watchdog asset. Trying cache for: ${request.url}`);
+    if (requireNetwork) {
+      return new Response(`Network required: Failed to fetch ${request.url}`, {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'text/plain' }
+      });
+    }
+
+    console.log(`[ServiceWorker] Network failed for ImagineDeck asset. Trying cache for: ${request.url}`);
     const cachedResponse = await cache.match(stableRequest);
 
     if (cachedResponse) {
@@ -247,14 +258,12 @@ async function handleApiRequest(request) {
     const networkResponse = await fetch(request);
 
     if (networkResponse && networkResponse.status === 200) {
-      // Create a cloned response with the custom fetch time header
       const responseToCache = await createResponseWithFetchTime(networkResponse.clone());
       await cache.put(request, responseToCache);
     }
 
     return networkResponse;
   } catch (error) {
-    // If network fails (offline), return the expired cache as a fallback if it exists
     if (cachedResponse) {
       console.log(`[ServiceWorker] Network failed for API. Returning expired cache.`);
       return cachedResponse;
@@ -289,24 +298,14 @@ async function handleNavigationRequest(request) {
 }
 
 /**
- * Handles static asset requests with a "Stale-While-Revalidate" strategy.
- * Returns the cached response immediately if available, while simultaneously
- * fetching from the network in the background to update the cache.
- * ImagineDeck assets that the watchdog explicitly evicts bypass the HTTP cache
- * so a fresh Cache API entry cannot be repopulated with stale browser-cache bytes.
+ * Handles other static asset requests with a "Stale-While-Revalidate" strategy.
  */
 async function handleStaticAssetRequest(request, evt) {
   const cachedResponse = await caches.match(request, { ignoreSearch: true });
 
   const networkFetchPromise = (async () => {
     try {
-      const requestUrl = new URL(request.url);
-      const cacheMode =
-        requestUrl.origin === self.location.origin &&
-        IMAGINEDECK_RELOAD_ASSET_PATHS.has(requestUrl.pathname)
-          ? 'reload'
-          : 'default';
-      const networkResponse = await fetch(request, { cache: cacheMode });
+      const networkResponse = await fetch(request);
       if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
         const cache = await caches.open(CORE_CACHE_NAME);
         await cache.put(request, networkResponse.clone());
@@ -322,14 +321,12 @@ async function handleStaticAssetRequest(request, evt) {
   })();
 
   if (cachedResponse) {
-    // If we have a cache, return it immediately and let the network fetch run in the background
     if (evt && evt.waitUntil) {
       evt.waitUntil(networkFetchPromise.catch(() => {}));
     }
     return cachedResponse;
   }
 
-  // If no cache, wait for the network response
   return networkFetchPromise;
 }
 
@@ -375,7 +372,6 @@ async function precacheApiContent() {
         console.warn(`[ServiceWorker] Failed to pre-cache API content for page ${i}`, e);
       }
 
-      // Wait for 1 second before fetching the next page to prevent overwhelming the server or causing issues on certain devices
       if (i < 10) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
