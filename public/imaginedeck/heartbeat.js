@@ -3,11 +3,64 @@
 
     const HEARTBEAT_INTERVAL_MS = 60_000;
     const REQUIRED_PARENT_WATCHDOG_VERSION = 2;
+    const PARENT_WATCHDOG_STARTUP_GRACE_MS = 10_000;
     const PARENT_RELOAD_RETRY_MS = 10 * 60_000;
     const PARENT_RELOAD_STORAGE_KEY = 'imaginedeck-parent-watchdog-reload-at';
 
     let previousClockValue = null;
     let queuedStateHeartbeat = false;
+    let parentWatchdogVerificationTimer = null;
+
+    function requestParentReload(reason) {
+        const now = Date.now();
+        const previousReloadAt = Number(
+            window.parent.sessionStorage.getItem(PARENT_RELOAD_STORAGE_KEY) || 0
+        );
+
+        if (now - previousReloadAt <= PARENT_RELOAD_RETRY_MS) {
+            return;
+        }
+
+        window.parent.sessionStorage.setItem(
+            PARENT_RELOAD_STORAGE_KEY,
+            String(now)
+        );
+        console.warn('[ImagineDeck Heartbeat] Reloading parent for watchdog migration.', {
+            reason
+        });
+        window.parent.location.reload();
+    }
+
+    function clearParentWatchdogVerification() {
+        if (parentWatchdogVerificationTimer !== null) {
+            clearTimeout(parentWatchdogVerificationTimer);
+            parentWatchdogVerificationTimer = null;
+        }
+    }
+
+    function scheduleParentWatchdogVerification() {
+        if (parentWatchdogVerificationTimer !== null) {
+            return;
+        }
+
+        parentWatchdogVerificationTimer = setTimeout(() => {
+            parentWatchdogVerificationTimer = null;
+
+            try {
+                if (
+                    window.parent.__IMAGINEDECK_WATCHDOG_VERSION__ !==
+                    REQUIRED_PARENT_WATCHDOG_VERSION
+                ) {
+                    requestParentReload('expected watchdog did not confirm execution');
+                }
+            } catch (error) {
+                console.warn(
+                    '[ImagineDeck Heartbeat] Delayed parent watchdog verification failed.',
+                    error
+                );
+            }
+        }, PARENT_WATCHDOG_STARTUP_GRACE_MS);
+    }
 
     function ensureParentWatchdogVersion() {
         if (window.parent === window) {
@@ -15,26 +68,28 @@
         }
 
         try {
-            if (
-                window.parent.__IMAGINEDECK_WATCHDOG_VERSION__ ===
-                REQUIRED_PARENT_WATCHDOG_VERSION
-            ) {
+            const actualVersion = window.parent.__IMAGINEDECK_WATCHDOG_VERSION__;
+            if (actualVersion === REQUIRED_PARENT_WATCHDOG_VERSION) {
+                clearParentWatchdogVerification();
                 return true;
             }
 
-            const now = Date.now();
-            const previousReloadAt = Number(
-                window.parent.sessionStorage.getItem(PARENT_RELOAD_STORAGE_KEY) || 0
-            );
+            const expectedVersion =
+                window.parent.__IMAGINEDECK_EXPECTED_WATCHDOG_VERSION__;
 
-            if (now - previousReloadAt > PARENT_RELOAD_RETRY_MS) {
-                window.parent.sessionStorage.setItem(
-                    PARENT_RELOAD_STORAGE_KEY,
-                    String(now)
-                );
-                window.parent.location.reload();
+            if (
+                actualVersion == null &&
+                expectedVersion === REQUIRED_PARENT_WATCHDOG_VERSION
+            ) {
+                // The parent HTML expects v2, but only watchdog.js may certify
+                // that v2 actually executed. Allow a short bootstrap grace period.
+                scheduleParentWatchdogVerification();
+                return true;
             }
 
+            requestParentReload(
+                `incompatible watchdog version: actual=${String(actualVersion)}, expected=${String(expectedVersion)}`
+            );
             return false;
         } catch (error) {
             console.warn('[ImagineDeck Heartbeat] Parent watchdog version check failed.', error);
