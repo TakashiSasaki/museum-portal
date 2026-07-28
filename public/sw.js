@@ -202,9 +202,15 @@ async function handleNetworkFirstAssetRequest(request) {
 
     if (networkResponse && networkResponse.status === 200) {
       await cache.put(stableRequest, networkResponse.clone());
+      return networkResponse;
     }
 
-    return networkResponse;
+    if (requireNetwork) {
+      return networkResponse;
+    }
+
+    const cachedResponse = await cache.match(stableRequest);
+    return cachedResponse || networkResponse;
   } catch (error) {
     if (requireNetwork) {
       return new Response(`Network required: Failed to fetch ${request.url}`, {
