@@ -4,138 +4,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>デジタルサイネージ プレビュー</title>
-    <link rel="stylesheet" href="index.css">
+    <title>愛媛大学ミュージアム イマジン・デッキ</title>
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #imaginedeck-frame {
+            display: block;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            border: 0;
+        }
+    </style>
 </head>
 
 <body>
-
-    <div class="screen-wrapper">
-
-        <!-- タイトル部分 -->
-        <div class="title-frame">
-            <h1>愛媛大学ミュージアム イマジン・デッキ</h1>
-        </div>
-
-        <!-- 上フレーム：時刻・ストップウォッチ・タイマー表示 -->
-        <div class="frame top-frame">
-            <!-- モード切り替えナビゲーション -->
-            <div class="top-nav">
-                <button class="nav-btn active" data-target="mode-clock">時計</button>
-                <button class="nav-btn" data-target="mode-stopwatch">ストップウォッチ</button>
-                <button class="nav-btn" data-target="mode-timer">タイマー</button>
-            </div>
-
-            <!-- 時計モード -->
-            <div id="mode-clock" class="top-mode-content active">
-                <div id="clock-date" class="clock-date"></div>
-                <div class="time-display-group">
-                    <span id="clock-h" class="time-num">00</span><span class="time-unit">時</span>
-                    <span id="clock-m" class="time-num">00</span><span class="time-unit">分</span>
-                    <span id="clock-s" class="time-num">00</span><span class="time-unit">秒</span>
-                </div>
-                <div id="upcoming-event-alert" class="upcoming-event-alert" style="display: none;"></div>
-            </div>
-
-            <!-- ストップウォッチモード -->
-            <div id="mode-stopwatch" class="top-mode-content">
-                <div id="stopwatch-display" class="time-display-group">
-                    <span id="sw-h" class="time-num">00</span><span class="time-unit">時</span>
-                    <span id="sw-m" class="time-num">00</span><span class="time-unit">分</span>
-                    <span id="sw-s" class="time-num">00</span><span class="time-unit">秒</span>
-                    <span id="sw-ms-disp" class="sw-ms">.00</span>
-                </div>
-                <div class="control-btns">
-                    <button id="sw-start-stop">スタート</button>
-                    <button id="sw-reset">リセット</button>
-                </div>
-            </div>
-
-            <!-- タイマーモード -->
-            <div id="mode-timer" class="top-mode-content">
-                <div class="timer-setup" id="timer-setup">
-                    <div class="timer-col">
-                        <button id="timer-h-up">▲</button>
-                        <div id="timer-setting-h" class="time-display-val">00</div>
-                        <button id="timer-h-down">▼</button>
-                    </div>
-                    <div class="timer-unit-setup">時</div>
-                    <div class="timer-col">
-                        <button id="timer-m-up">▲</button>
-                        <div id="timer-setting-m" class="time-display-val">05</div>
-                        <button id="timer-m-down">▼</button>
-                    </div>
-                    <div class="timer-unit-setup">分</div>
-                </div>
-                <div id="timer-display" class="time-display-group" style="display:none;">
-                    <span id="tm-h" class="time-num">00</span><span class="time-unit">時</span>
-                    <span id="tm-m" class="time-num">00</span><span class="time-unit">分</span>
-                    <span id="tm-s" class="time-num">00</span><span class="time-unit">秒</span>
-                </div>
-                <div class="control-btns">
-                    <button id="timer-start-stop">スタート</button>
-                    <button id="timer-reset">リセット</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 中フレーム：カレンダー表示 -->
-        <div class="frame middle-frame">
-            <div class="calendar-header">
-                <button id="prev-month">◀ 前月</button>
-                <h2 id="calendar-month-year"></h2>
-                <button id="next-month">次月 ▶</button>
-            </div>
-            <table class="calendar-table">
-                <thead>
-                    <tr>
-                        <th style="color:red;">日</th>
-                        <th>月</th>
-                        <th>火</th>
-                        <th>水</th>
-                        <th>木</th>
-                        <th>金</th>
-                        <th style="color:blue;">土</th>
-                    </tr>
-                </thead>
-                <tbody id="calendar-body">
-                    <!-- カレンダーの中身がここに生成されます -->
-                </tbody>
-            </table>
-        </div>
-
-        <!-- 下フレーム：お知らせ -->
-        <div class="frame bottom-frame">
-            <div class="notice-wrapper">
-                <div class="notice-header">
-                    <div class="notice-tabs">
-                        <button class="notice-tab-btn active" data-tab="upcoming">これからのイベント</button>
-                        <button class="notice-tab-btn" data-tab="past">過去のイベント</button>
-                    </div>
-                    <div class="pagination-controls">
-                        <button id="prev-notice">◀</button>
-                        <span id="notice-page-indicator">1 / 1</span>
-                        <button id="next-notice">▶</button>
-                    </div>
-                </div>
-                <ul id="notice-list" class="notice-list">
-                    <!-- フィードからパースされたリストがここに生成されます -->
-                </ul>
-            </div>
-        </div>
-
-        <!-- フッターフレーム：QRコード -->
-        <div class="frame footer-frame">
-            <div class="qr-wrapper-horizontal">
-                <div class="qr-text">愛媛大学ミュージアム ポータルサイト</div>
-                <img src="./QR_458893.png" alt="QR Code">
-            </div>
-        </div>
-
-    </div>
-
-    <script src="mergeFeeds.js" defer></script>
-    <script src="index.js" defer></script>
+    <iframe
+        id="imaginedeck-frame"
+        src="./app.html"
+        title="愛媛大学ミュージアム イマジン・デッキ"
+        allow="autoplay; fullscreen"
+        loading="eager"
+    ></iframe>
 </body>
 
 </html>
