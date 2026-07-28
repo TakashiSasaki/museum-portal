@@ -8,10 +8,12 @@
     const HEARTBEAT_TIMEOUT_MS = 150_000;
     const CHILD_STATE_CONFIRM_TIMEOUT_MS = 2_000;
     const LEGACY_CHILD_CONFIRM_DELAY_MS = 1_200;
+    const ASSET_CONFIRM_TIMEOUT_MS = 30_000;
     const RELOAD_WINDOW_MS = 10 * 60_000;
     const MAX_RELOADS_PER_WINDOW = 3;
     const APP_URL = './app.html';
     const ASSET_SIGNATURE_STORAGE_KEY = 'imaginedeck-loaded-asset-signature';
+    const REQUIRE_NETWORK_HEADER = 'X-ImagineDeck-Require-Network';
     const MONITORED_ASSET_URLS = [
         './app.html',
         './index.js',
@@ -34,11 +36,15 @@
     let reloadInProgress = false;
     let childStateKnown = false;
     let childBusy = false;
+    let childAssetsReady = false;
     let childHeartbeatVersion = null;
     let childMigrationPending = false;
     let loadedAssetSignature = sessionStorage.getItem(ASSET_SIGNATURE_STORAGE_KEY);
     let pendingAssetSignature = null;
     let updateCheckInProgress = false;
+    let confirmationSignature = null;
+    let confirmationLoadSeen = false;
+    let confirmationTimeoutId = null;
     const childStateWaiters = new Set();
 
     function pruneReloadHistory(now) {
@@ -109,164 +115,51 @@
         console.info('[ImagineDeck Watchdog] Heartbeat grace period granted.', { reason });
     }
 
+    async function waitForServiceWorkerController(timeoutMs = 5_000) {
+        if (navigator.serviceWorker.controller) {
+            return true;
+        }
+
+        return new Promise(resolve => {
+            const timeoutId = setTimeout(() => resolve(false), timeoutMs);
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                clearTimeout(timeoutId);
+                resolve(Boolean(navigator.serviceWorker.controller));
+            }, { once: true });
+        });
+    }
+
     async function refreshServiceWorker() {
         if (!('serviceWorker' in navigator)) {
-            return;
+            return false;
         }
 
         try {
             const registration = await navigator.serviceWorker.getRegistration();
             if (!registration) {
-                return;
+                return false;
             }
 
             await registration.update();
 
             const candidate = registration.installing || registration.waiting;
-            if (!candidate || candidate.state === 'activated') {
-                return;
+            if (candidate && candidate.state !== 'activated') {
+                await new Promise(resolve => {
+                    const timeoutId = setTimeout(resolve, 10_000);
+                    candidate.addEventListener('statechange', () => {
+                        if (candidate.state === 'activated' || candidate.state === 'redundant') {
+                            clearTimeout(timeoutId);
+                            resolve();
+                        }
+                    });
+                });
             }
 
-            await new Promise(resolve => {
-                const timeoutId = setTimeout(resolve, 10_000);
-                candidate.addEventListener('statechange', () => {
-                    if (candidate.state === 'activated' || candidate.state === 'redundant') {
-                        clearTimeout(timeoutId);
-                        resolve();
-                    }
-                });
-            });
+            return waitForServiceWorkerController();
         } catch (error) {
             console.warn('[ImagineDeck Watchdog] Service Worker update check failed.', error);
-        }
-    }
-
-    async function evictMonitoredAssetCaches() {
-        if (!('caches' in window)) {
-            return;
-        }
-
-        try {
-            const cacheNames = await caches.keys();
-            const cacheEvictionUrls = MONITORED_ASSET_URLS.filter(
-                assetUrl => assetUrl !== APP_URL
-            );
-            const assetRequests = cacheEvictionUrls.map(
-                assetUrl => new Request(new URL(assetUrl, window.location.href).href)
-            );
-
-            await Promise.all(cacheNames.map(async cacheName => {
-                const cache = await caches.open(cacheName);
-                await Promise.all(assetRequests.map(
-                    request => cache.delete(request, { ignoreSearch: true })
-                ));
-            }));
-        } catch (error) {
-            console.warn('[ImagineDeck Watchdog] Failed to evict monitored asset caches.', error);
-        }
-    }
-
-    async function reloadFrame(reason, options = {}) {
-        if (reloadInProgress) {
             return false;
         }
-
-        const now = Date.now();
-        pruneReloadHistory(now);
-
-        if (reloadHistory.length >= MAX_RELOADS_PER_WINDOW) {
-            if (!reloadSuppressed) {
-                console.error(
-                    '[ImagineDeck Watchdog] Automatic reload suppressed after repeated failures.',
-                    { reason, reloadHistory: [...reloadHistory] }
-                );
-            }
-            reloadSuppressed = true;
-            return false;
-        }
-
-        reloadInProgress = true;
-
-        try {
-            if (options.refreshAssets === true) {
-                await refreshServiceWorker();
-                await evictMonitoredAssetCaches();
-            }
-
-            if (options.requireIdle === true) {
-                const stateConfirmed = await requestFreshChildState(
-                    'confirm idle state before applying content update'
-                );
-
-                if (!stateConfirmed || !childStateKnown || childBusy) {
-                    console.info(
-                        '[ImagineDeck Watchdog] Content update reload deferred after final state check.',
-                        {
-                            stateConfirmed,
-                            childStateKnown,
-                            childBusy,
-                            childHeartbeatVersion
-                        }
-                    );
-                    return false;
-                }
-            }
-
-            const commitTime = Date.now();
-            pruneReloadHistory(commitTime);
-            if (reloadHistory.length >= MAX_RELOADS_PER_WINDOW) {
-                reloadSuppressed = true;
-                return false;
-            }
-
-            reloadHistory.push(commitTime);
-            lastHealthyHeartbeatAt = commitTime;
-            childStateKnown = false;
-            childBusy = false;
-            childHeartbeatVersion = null;
-
-            if (options.assetSignature) {
-                loadedAssetSignature = options.assetSignature;
-                sessionStorage.setItem(
-                    ASSET_SIGNATURE_STORAGE_KEY,
-                    options.assetSignature
-                );
-                pendingAssetSignature = null;
-            }
-
-            const stableAppUrl = new URL(APP_URL, window.location.href).href;
-
-            console.warn('[ImagineDeck Watchdog] Reloading iframe.', { reason });
-            frame.src = stableAppUrl;
-            return true;
-        } finally {
-            reloadInProgress = false;
-        }
-    }
-
-    async function applyPendingUpdateIfSafe() {
-        const assetUpdatePending = Boolean(pendingAssetSignature);
-        if (
-            (!assetUpdatePending && !childMigrationPending) ||
-            reloadInProgress ||
-            !childStateKnown ||
-            childBusy
-        ) {
-            return;
-        }
-
-        const signatureToLoad = pendingAssetSignature;
-        const reason = assetUpdatePending && childMigrationPending
-            ? 'server content update and child heartbeat migration detected'
-            : assetUpdatePending
-                ? 'server content update detected'
-                : 'legacy child heartbeat protocol detected';
-
-        await reloadFrame(reason, {
-            refreshAssets: true,
-            requireIdle: true,
-            assetSignature: signatureToLoad || undefined
-        });
     }
 
     function assetValidatorFromResponse(assetUrl, response) {
@@ -291,6 +184,16 @@
         ).join('');
     }
 
+    async function responseSignature(assetUrl, response) {
+        const validator = assetValidatorFromResponse(assetUrl, response);
+        if (validator) {
+            return validator;
+        }
+
+        const hash = await sha256Hex(await response.arrayBuffer());
+        return `${assetUrl}|sha256:${hash}`;
+    }
+
     async function fetchAssetContentHash(assetUrl, url) {
         const response = await fetch(url.href, {
             method: 'GET',
@@ -301,8 +204,7 @@
             throw new Error(`GET ${url.pathname} returned ${response.status}`);
         }
 
-        const hash = await sha256Hex(await response.arrayBuffer());
-        return `${assetUrl}|sha256:${hash}`;
+        return responseSignature(assetUrl, response);
     }
 
     async function fetchAssetValidator(assetUrl) {
@@ -337,6 +239,238 @@
         return validators.join('\n');
     }
 
+    async function fetchAssetFromNetwork(assetUrl) {
+        const url = new URL(assetUrl, window.location.href);
+        const response = await fetch(url.href, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                [REQUIRE_NETWORK_HEADER]: '1'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Network preparation for ${url.pathname} returned ${response.status}`);
+        }
+
+        return responseSignature(assetUrl, response);
+    }
+
+    async function prepareMonitoredAssets(expectedSignature) {
+        const serviceWorkerReady = await refreshServiceWorker();
+        if (!serviceWorkerReady) {
+            throw new Error('The portal Service Worker is not controlling the page.');
+        }
+
+        const preparedValidators = await Promise.all(
+            MONITORED_ASSET_URLS.map(fetchAssetFromNetwork)
+        );
+        const preparedSignature = preparedValidators.join('\n');
+
+        if (preparedSignature !== expectedSignature) {
+            pendingAssetSignature = preparedSignature;
+            console.info(
+                '[ImagineDeck Watchdog] Server assets changed while preparing the update; deferring reload.',
+                {
+                    expectedSignature,
+                    preparedSignature
+                }
+            );
+            return null;
+        }
+
+        return preparedSignature;
+    }
+
+    function clearAssetConfirmationTimer() {
+        if (confirmationTimeoutId !== null) {
+            clearTimeout(confirmationTimeoutId);
+            confirmationTimeoutId = null;
+        }
+    }
+
+    function abandonAssetConfirmation(reason) {
+        if (confirmationSignature === null) {
+            return;
+        }
+
+        console.warn('[ImagineDeck Watchdog] Asset confirmation did not complete.', {
+            reason,
+            confirmationSignature,
+            pendingAssetSignature,
+            childAssetsReady
+        });
+
+        clearAssetConfirmationTimer();
+        confirmationSignature = null;
+        confirmationLoadSeen = false;
+        void applyPendingUpdateIfSafe();
+    }
+
+    function beginAssetConfirmationAfterLoad() {
+        if (confirmationSignature === null) {
+            return;
+        }
+
+        confirmationLoadSeen = true;
+        clearAssetConfirmationTimer();
+        confirmationTimeoutId = setTimeout(
+            () => abandonAssetConfirmation('timed out waiting for an asset-ready heartbeat'),
+            ASSET_CONFIRM_TIMEOUT_MS
+        );
+    }
+
+    function commitConfirmedAssetSignature(message) {
+        if (
+            confirmationSignature === null ||
+            !confirmationLoadSeen ||
+            message.assetsReady !== true ||
+            childHeartbeatVersion < REQUIRED_CHILD_HEARTBEAT_VERSION
+        ) {
+            return false;
+        }
+
+        if (pendingAssetSignature !== confirmationSignature) {
+            abandonAssetConfirmation('server signature changed before the iframe confirmed loading');
+            return false;
+        }
+
+        loadedAssetSignature = confirmationSignature;
+        sessionStorage.setItem(
+            ASSET_SIGNATURE_STORAGE_KEY,
+            confirmationSignature
+        );
+        pendingAssetSignature = null;
+        confirmationSignature = null;
+        confirmationLoadSeen = false;
+        clearAssetConfirmationTimer();
+
+        console.info('[ImagineDeck Watchdog] Loaded asset signature confirmed by the iframe.', {
+            assetStatus: message.assetStatus
+        });
+        return true;
+    }
+
+    async function reloadFrame(reason, options = {}) {
+        if (reloadInProgress || confirmationSignature !== null) {
+            return false;
+        }
+
+        const now = Date.now();
+        pruneReloadHistory(now);
+
+        if (reloadHistory.length >= MAX_RELOADS_PER_WINDOW) {
+            if (!reloadSuppressed) {
+                console.error(
+                    '[ImagineDeck Watchdog] Automatic reload suppressed after repeated failures.',
+                    { reason, reloadHistory: [...reloadHistory] }
+                );
+            }
+            reloadSuppressed = true;
+            return false;
+        }
+
+        reloadInProgress = true;
+
+        try {
+            let preparedSignature = null;
+
+            if (options.assetSignature) {
+                try {
+                    preparedSignature = await prepareMonitoredAssets(options.assetSignature);
+                } catch (error) {
+                    console.warn(
+                        '[ImagineDeck Watchdog] Failed to prepare monitored assets; retaining the existing cached version.',
+                        error
+                    );
+                    return false;
+                }
+
+                if (preparedSignature === null) {
+                    return false;
+                }
+            } else if (options.refreshAssets === true) {
+                await refreshServiceWorker();
+            }
+
+            if (options.requireIdle === true) {
+                const stateConfirmed = await requestFreshChildState(
+                    'confirm idle state before applying content update'
+                );
+
+                if (!stateConfirmed || !childStateKnown || childBusy) {
+                    console.info(
+                        '[ImagineDeck Watchdog] Content update reload deferred after final state check.',
+                        {
+                            stateConfirmed,
+                            childStateKnown,
+                            childBusy,
+                            childHeartbeatVersion
+                        }
+                    );
+                    return false;
+                }
+            }
+
+            const commitTime = Date.now();
+            pruneReloadHistory(commitTime);
+            if (reloadHistory.length >= MAX_RELOADS_PER_WINDOW) {
+                reloadSuppressed = true;
+                return false;
+            }
+
+            reloadHistory.push(commitTime);
+            lastHealthyHeartbeatAt = commitTime;
+            childStateKnown = false;
+            childBusy = false;
+            childAssetsReady = false;
+            childHeartbeatVersion = null;
+
+            if (preparedSignature !== null) {
+                confirmationSignature = preparedSignature;
+                confirmationLoadSeen = false;
+                clearAssetConfirmationTimer();
+            }
+
+            const stableAppUrl = new URL(APP_URL, window.location.href).href;
+
+            console.warn('[ImagineDeck Watchdog] Reloading iframe.', {
+                reason,
+                awaitingAssetConfirmation: preparedSignature !== null
+            });
+            frame.src = stableAppUrl;
+            return true;
+        } finally {
+            reloadInProgress = false;
+        }
+    }
+
+    async function applyPendingUpdateIfSafe() {
+        const assetUpdatePending = Boolean(pendingAssetSignature);
+        if (
+            (!assetUpdatePending && !childMigrationPending) ||
+            reloadInProgress ||
+            confirmationSignature !== null ||
+            !childStateKnown ||
+            childBusy
+        ) {
+            return;
+        }
+
+        const signatureToLoad = pendingAssetSignature;
+        const reason = assetUpdatePending && childMigrationPending
+            ? 'server content update and child heartbeat migration detected'
+            : assetUpdatePending
+                ? 'server content update detected'
+                : 'legacy child heartbeat protocol detected';
+
+        await reloadFrame(reason, {
+            refreshAssets: true,
+            requireIdle: true,
+            assetSignature: signatureToLoad || undefined
+        });
+    }
+
     async function checkForContentUpdate() {
         if (updateCheckInProgress) {
             return;
@@ -358,13 +492,22 @@
 
             if (currentSignature === loadedAssetSignature) {
                 pendingAssetSignature = null;
+                if (
+                    confirmationSignature !== null &&
+                    confirmationSignature !== currentSignature
+                ) {
+                    abandonAssetConfirmation('server assets returned to the loaded signature');
+                }
                 await applyPendingUpdateIfSafe();
                 return;
             }
 
             pendingAssetSignature = currentSignature;
             console.info('[ImagineDeck Watchdog] Server content update detected.', {
-                deferred: !childStateKnown || childBusy
+                deferred:
+                    !childStateKnown ||
+                    childBusy ||
+                    confirmationSignature !== null
             });
             await applyPendingUpdateIfSafe();
         } catch (error) {
@@ -423,6 +566,7 @@
         lastHealthyHeartbeatAt = Date.now();
         childStateKnown = true;
         childBusy = Boolean(message.stopwatchRunning) || Boolean(message.timerRunning);
+        childAssetsReady = message.assetsReady === true;
         resolveChildStateWaiters(true);
 
         if (childMigrationPending) {
@@ -430,6 +574,19 @@
                 childHeartbeatVersion,
                 deferred: childBusy
             });
+        }
+
+        if (confirmationSignature !== null && confirmationLoadSeen) {
+            if (!commitConfirmedAssetSignature(message)) {
+                console.info(
+                    '[ImagineDeck Watchdog] Waiting for the reloaded iframe to confirm all monitored assets.',
+                    {
+                        assetsReady: message.assetsReady,
+                        assetStatus: message.assetStatus,
+                        childHeartbeatVersion
+                    }
+                );
+            }
         }
 
         if (reloadSuppressed) {
@@ -444,6 +601,7 @@
     frame.addEventListener('load', () => {
         // Allow a complete heartbeat timeout after every iframe navigation.
         grantHeartbeatGrace('iframe loaded');
+        beginAssetConfirmationAfterLoad();
     });
 
     document.addEventListener('visibilitychange', () => {
