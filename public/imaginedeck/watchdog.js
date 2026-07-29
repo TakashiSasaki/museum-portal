@@ -17,6 +17,7 @@
     const ASSET_SIGNATURE_STORAGE_KEY = 'imaginedeck-loaded-asset-signature';
     const REQUIRE_NETWORK_HEADER = 'X-ImagineDeck-Require-Network';
     const STAGE_ONLY_HEADER = 'X-ImagineDeck-Stage-Only';
+    const PROMOTE_ATOMIC_HEADER = 'X-ImagineDeck-Promote-Atomic';
     const ACTIVE_ASSET_CACHE_NAME = 'museum-portal-imaginedeck-assets-v1';
     const MONITORED_ASSET_URLS = [
         './app.html',
@@ -337,13 +338,16 @@
     }
 
     async function requestAtomicPromotionFromServiceWorker(expectedSignature) {
-        // An ordinary monitored-asset request enters the Service Worker's
-        // serialized complete-set refresh path. The window never writes the
-        // shared active cache directly.
+        // A dedicated promotion request enters the Service Worker's serialized
+        // complete-set refresh path. The window never writes the shared active
+        // cache directly.
         const probeUrl = new URL(APP_URL, window.location.href);
         const response = await fetch(probeUrl.href, {
             method: 'GET',
-            cache: 'no-store'
+            cache: 'no-store',
+            headers: {
+                [PROMOTE_ATOMIC_HEADER]: '1'
+            }
         });
 
         if (!response.ok) {
@@ -470,6 +474,7 @@
         }
 
         reloadInProgress = true;
+
         try {
             let preparedSignature = null;
 
@@ -478,7 +483,7 @@
                     preparedSignature = await prepareMonitoredAssets(options.assetSignature);
                 } catch (error) {
                     console.warn(
-                        '[ImagineDeck Watchdog] Failed to prepare a coherent monitored asset set; retaining the active set.',
+                        '[ImagineDeck Watchdog] Failed to prepare a complete monitored asset set; retaining the active cached set.',
                         error
                     );
                     return false;
@@ -499,7 +504,12 @@
                 if (!stateConfirmed || !childStateKnown || childBusy) {
                     console.info(
                         '[ImagineDeck Watchdog] Content update reload deferred after final state check.',
-                        { stateConfirmed, childStateKnown, childBusy, childHeartbeatVersion }
+                        {
+                            stateConfirmed,
+                            childStateKnown,
+                            childBusy,
+                            childHeartbeatVersion
+                        }
                     );
                     return false;
                 }
@@ -527,6 +537,7 @@
             }
 
             const stableAppUrl = new URL(APP_URL, window.location.href).href;
+
             console.warn('[ImagineDeck Watchdog] Reloading iframe.', {
                 reason,
                 awaitingAssetConfirmation: preparedSignature !== null
@@ -575,21 +586,6 @@
         }
     }
 
-    async function reconcileActiveSetWithLoadedSignature(currentSignature) {
-        const activeSignature = await readActiveAssetSignature();
-        if (activeSignature === currentSignature) {
-            return true;
-        }
-
-        console.info(
-            '[ImagineDeck Watchdog] Reconciling the active cache with the currently loaded server signature.',
-            { currentSignature, activeSignature }
-        );
-
-        const reconciledSignature = await prepareMonitoredAssets(currentSignature);
-        return reconciledSignature === currentSignature;
-    }
-
     async function checkForContentUpdate() {
         if (updateCheckInProgress) {
             return;
@@ -611,12 +607,6 @@
             }
 
             if (currentSignature === loadedAssetSignature) {
-                const reconciled = await reconcileActiveSetWithLoadedSignature(currentSignature);
-                if (!reconciled) {
-                    pendingAssetSignature = currentSignature;
-                    return;
-                }
-
                 pendingAssetSignature = null;
                 if (
                     confirmationSignature !== null &&
