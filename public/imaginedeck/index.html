@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>愛媛大学ミュージアム イマジン・デッキ</title>
+    <script>
+        // Declares the watchdog version this HTML expects. Only watchdog.js may
+        // set __IMAGINEDECK_WATCHDOG_VERSION__ after successful initialization.
+        window.__IMAGINEDECK_EXPECTED_WATCHDOG_VERSION__ = 2;
+    </script>
     <style>
-        html,
-        body {
+        html, body {
             width: 100%;
             height: 100%;
             margin: 0;
@@ -15,7 +18,6 @@
             overflow: hidden;
             background: #000;
         }
-
         #imaginedeck-frame {
             display: block;
             width: 100%;
@@ -26,16 +28,14 @@
         }
     </style>
 </head>
-
 <body>
     <iframe
         id="imaginedeck-frame"
-        src="./app.html"
+        src="about:blank"
         title="愛媛大学ミュージアム イマジン・デッキ"
         allow="autoplay; fullscreen"
         loading="eager"
     ></iframe>
-    <script src="watchdog.js" defer></script>
+    <script src="./bootstrap-v45.js"></script>
 </body>
-
 </html>
