@@ -3,7 +3,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v33'; // Per-navigation ImagineDeck generation pinning
+const CORE_CACHE_VERSION = 'v34'; // Verified per-navigation ImagineDeck generation
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -32,6 +32,18 @@ const ATOMIC_IMAGINEDECK_ASSET_PATHS = new Set([
   '/imaginedeck/heartbeat.js',
   '/imaginedeck/QR_458893.png'
 ]);
+
+const IMAGINEDECK_ASSET_SIGNATURE_KEYS = new Map([
+  ['/imaginedeck/app.html', './app.html'],
+  ['/imaginedeck/index.js', './index.js'],
+  ['/imaginedeck/index.css', './index.css'],
+  ['/imaginedeck/mergeFeeds.js', './mergeFeeds.js'],
+  ['/imaginedeck/heartbeat.js', './heartbeat.js'],
+  ['/imaginedeck/QR_458893.png', './QR_458893.png']
+]);
+
+const IMAGINEDECK_PIN_SIGNATURE_META_NAME =
+  'imaginedeck-pinned-asset-signature';
 
 const NETWORK_FIRST_ASSET_PATHS = new Set([
   ...ATOMIC_IMAGINEDECK_ASSET_PATHS,
@@ -299,6 +311,56 @@ async function responsesRepresentSameAsset(networkResponse, cachedResponse) {
   return networkHash === cachedHash;
 }
 
+async function imagineDeckResponseSignature(pathname, response) {
+  const signatureKey = IMAGINEDECK_ASSET_SIGNATURE_KEYS.get(pathname);
+  if (!signatureKey) {
+    throw new Error(`No ImagineDeck signature key for ${pathname}`);
+  }
+
+  const validator = responseValidator(response);
+  if (validator) {
+    return `${signatureKey}|${validator}`;
+  }
+
+  const hash = await responseBodyHash(response);
+  return `${signatureKey}|sha256:${hash}`;
+}
+
+async function imagineDeckGenerationSignature(entries) {
+  const signatures = await Promise.all(
+    entries.map(entry =>
+      imagineDeckResponseSignature(
+        new URL(entry.request.url).pathname,
+        entry.response.clone()
+      )
+    )
+  );
+  return signatures.join('\n');
+}
+
+async function attachImagineDeckGenerationSignature(response, signature) {
+  const html = await response.text();
+  const marker =
+    `<meta name="${IMAGINEDECK_PIN_SIGNATURE_META_NAME}" ` +
+    `content="${encodeURIComponent(signature)}">`;
+  const signedHtml = html.includes('</head>')
+    ? html.replace('</head>', `  ${marker}\n</head>`)
+    : `${marker}\n${html}`;
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  headers.delete('etag');
+  if (!headers.has('content-type')) {
+    headers.set('content-type', 'text/html; charset=UTF-8');
+  }
+
+  return new Response(signedHtml, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 async function rollbackAtomicAssetSet(activeCache, previousEntries) {
   for (const entry of previousEntries) {
     if (entry.response) {
@@ -404,6 +466,7 @@ async function readImagineDeckClientPin(clientId) {
     const pin = await response.json();
     if (
       typeof pin.cacheName !== 'string' ||
+      typeof pin.signature !== 'string' ||
       typeof pin.createdAt !== 'number' ||
       Date.now() - pin.createdAt > IMAGINEDECK_PIN_MAX_AGE_MS
     ) {
@@ -482,6 +545,7 @@ async function pinActiveImagineDeckGeneration(clientId) {
         return { request, response };
       })
     );
+    const signature = await imagineDeckGenerationSignature(entries);
 
     const cacheName =
       `${IMAGINEDECK_PIN_CACHE_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -497,6 +561,7 @@ async function pinActiveImagineDeckGeneration(clientId) {
         new Response(
           JSON.stringify({
             cacheName,
+            signature,
             createdAt: Date.now()
           }),
           {
@@ -513,7 +578,7 @@ async function pinActiveImagineDeckGeneration(clientId) {
       await caches.delete(previousCacheName);
     }
 
-    return cacheName;
+    return { cacheName, signature };
   });
 }
 
@@ -682,9 +747,14 @@ async function handleNetworkFirstAssetRequest(request, evt) {
   }
 
   try {
-    const pinnedCacheName = await pinActiveImagineDeckGeneration(navigationClientId);
-    const pinnedCache = await caches.open(pinnedCacheName);
-    return (await pinnedCache.match(stableRequest)) || activeDocumentResponse;
+    const pinnedGeneration = await pinActiveImagineDeckGeneration(navigationClientId);
+    const pinnedCache = await caches.open(pinnedGeneration.cacheName);
+    const pinnedDocumentResponse =
+      (await pinnedCache.match(stableRequest)) || activeDocumentResponse;
+    return attachImagineDeckGenerationSignature(
+      pinnedDocumentResponse,
+      pinnedGeneration.signature
+    );
   } catch (error) {
     console.warn(
       '[ServiceWorker] Failed to pin the ImagineDeck generation for this navigation.',
