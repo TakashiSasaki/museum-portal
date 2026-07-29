@@ -550,7 +550,11 @@ async function handleNetworkFirstAssetRequest(request, evt) {
   const stageOnly =
     request.headers.get(IMAGINEDECK_STAGE_ONLY_HEADER) === '1';
   const promoteAtomic =
-    request.headers.get(IMAGINEDECK_PROMOTE_ATOMIC_HEADER) === '1';
+    request.headers.get(IMAGINEDECK_PROMOTE_ATOMIC_HEADER) === '1' ||
+    (
+      requestUrl.pathname === IMAGINEDECK_DOCUMENT_PATH &&
+      request.mode !== 'navigate'
+    );
   const isAtomicAsset =
     ATOMIC_IMAGINEDECK_ASSET_PATHS.has(requestUrl.pathname);
   const isGenerationDocument =
