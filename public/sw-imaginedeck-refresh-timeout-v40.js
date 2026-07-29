@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const REFRESH_TIMEOUT_PATCH_VERSION = 38;
+  const REFRESH_TIMEOUT_PATCH_VERSION = 40;
   const ATOMIC_NETWORK_REQUEST_TIMEOUT_MS = 4_000;
   const ATOMIC_HANDLER_TIMEOUT_MS = 12_000;
   const PIN_FALLBACK_TIMEOUT_MS = 2_000;
@@ -14,6 +14,7 @@
     `${IMAGINEDECK_PIN_CACHE_PREFIX}generation-v36-`;
   const baseFetch = self.fetch.bind(self);
   const baseHandleNetworkFirstAssetRequest = handleNetworkFirstAssetRequest;
+  const drainingNavigationWorkByClient = new Map();
 
   function serviceUnavailable(message) {
     return new Response(message, {
@@ -141,6 +142,44 @@
     return response ? { response, signature: pointer.signature } : null;
   }
 
+  function generationNavigationClientId(evt) {
+    return evt?.resultingClientId || evt?.clientId || '';
+  }
+
+  function isGenerationNavigation(request) {
+    const requestUrl = new URL(request.url);
+    return (
+      requestUrl.pathname === IMAGINEDECK_DOCUMENT_PATH &&
+      request.mode === 'navigate'
+    );
+  }
+
+  function quarantineTimedOutNavigation(clientId, workPromise) {
+    if (!clientId) {
+      return;
+    }
+
+    const token = {};
+    const drainPromise = Promise.resolve(workPromise)
+      .catch(error => {
+        console.warn(
+          '[ServiceWorker] Timed-out ImagineDeck navigation work eventually failed.',
+          error
+        );
+      })
+      .finally(() => {
+        const current = drainingNavigationWorkByClient.get(clientId);
+        if (current?.token === token) {
+          drainingNavigationWorkByClient.delete(clientId);
+        }
+      });
+
+    drainingNavigationWorkByClient.set(clientId, {
+      token,
+      drainPromise
+    });
+  }
+
   async function fallbackAfterRefreshTimeout(request, evt, error) {
     const requestUrl = new URL(request.url);
     const requireNetwork =
@@ -156,33 +195,26 @@
       request.headers.get(IMAGINEDECK_PROMOTE_ATOMIC_HEADER) !== '1';
 
     console.warn(
-      `[ServiceWorker] ImagineDeck generation handling timed out for ${requestUrl.pathname}; using a coherent cached generation when allowed.`,
+      `[ServiceWorker] ImagineDeck generation handling failed for ${requestUrl.pathname}; using a coherent cached generation when allowed.`,
       error
     );
 
     // Network-verification requests must never be certified from cached bytes.
     if (requireNetwork || stageOnly || isContentHashProbe) {
       return serviceUnavailable(
-        `Network-only ImagineDeck request timed out for ${request.url}`
+        `Network-only ImagineDeck request failed for ${request.url}`
       );
     }
 
-    const isNavigation =
-      requestUrl.pathname === IMAGINEDECK_DOCUMENT_PATH &&
-      request.mode === 'navigate';
-
-    if (isNavigation) {
-      const clientId = evt?.resultingClientId || evt?.clientId || '';
+    if (isGenerationNavigation(request)) {
+      const clientId = generationNavigationClientId(evt);
       if (!clientId) {
         return serviceUnavailable(
-          'Unable to pin a cached ImagineDeck generation after refresh timeout.'
+          'Unable to pin a cached ImagineDeck generation after refresh failure.'
         );
       }
 
       try {
-        // With an existing pointer this path performs only Cache API work. If no
-        // coherent pointer exists, the v36 helper may join the timed-out refresh;
-        // bound that wait separately and fail closed.
         const pinned = await withTimeout(
           pinActiveImagineDeckGeneration(clientId),
           PIN_FALLBACK_TIMEOUT_MS,
@@ -228,13 +260,80 @@
     );
   }
 
-  handleNetworkFirstAssetRequest = function handleNetworkFirstAssetRequestV38(
+  function runBoundedNavigation(request, evt) {
+    const clientId = generationNavigationClientId(evt);
+    if (!clientId) {
+      return Promise.resolve(serviceUnavailable(
+        'Unable to identify the ImagineDeck navigation client.'
+      ));
+    }
+
+    if (drainingNavigationWorkByClient.has(clientId)) {
+      return Promise.resolve(serviceUnavailable(
+        'Previous timed-out ImagineDeck navigation work is still draining.'
+      ));
+    }
+
+    const workPromise = Promise.resolve(
+      baseHandleNetworkFirstAssetRequest(request, evt)
+    );
+
+    return new Promise(resolve => {
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        quarantineTimedOutNavigation(clientId, workPromise);
+        console.warn(
+          '[ServiceWorker] ImagineDeck navigation generation work timed out; failing closed until the stale operation settles.',
+          { clientId, timeoutMs: ATOMIC_HANDLER_TIMEOUT_MS }
+        );
+        resolve(serviceUnavailable(
+          'ImagineDeck navigation generation preparation timed out.'
+        ));
+      }, ATOMIC_HANDLER_TIMEOUT_MS);
+
+      workPromise.then(
+        response => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeoutId);
+          resolve(response);
+        },
+        error => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeoutId);
+          resolve(fallbackAfterRefreshTimeout(request, evt, error));
+        }
+      );
+    });
+  }
+
+  handleNetworkFirstAssetRequest = function handleNetworkFirstAssetRequestV40(
     request,
     evt
   ) {
     const { isAtomic } = atomicRequestInfo(request);
     if (!isAtomic) {
       return baseHandleNetworkFirstAssetRequest(request, evt);
+    }
+
+    if (isGenerationNavigation(request)) {
+      return runBoundedNavigation(request, evt);
+    }
+
+    const clientId = evt?.clientId || '';
+    if (clientId && drainingNavigationWorkByClient.has(clientId)) {
+      return Promise.resolve(serviceUnavailable(
+        'ImagineDeck subresource delivery is blocked while stale navigation work drains.'
+      ));
     }
 
     return withTimeout(
