@@ -3,7 +3,7 @@
 // 1. Configuration
 // --------------------------------------------------
 
-const CORE_CACHE_VERSION = 'v32'; // Atomic normal-load reconciliation
+const CORE_CACHE_VERSION = 'v33'; // Per-navigation ImagineDeck generation pinning
 const API_CACHE_VERSION = 'v4'; // TTL 20h
 
 const CORE_CACHE_NAME = `museum-portal-core-${CORE_CACHE_VERSION}`;
@@ -18,6 +18,11 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP
 
 const IMAGINEDECK_REQUIRE_NETWORK_HEADER = 'X-ImagineDeck-Require-Network';
 const IMAGINEDECK_STAGE_ONLY_HEADER = 'X-ImagineDeck-Stage-Only';
+const IMAGINEDECK_PROMOTE_ATOMIC_HEADER = 'X-ImagineDeck-Promote-Atomic';
+const IMAGINEDECK_DOCUMENT_PATH = '/imaginedeck/app.html';
+const IMAGINEDECK_PIN_METADATA_CACHE_NAME = 'museum-portal-imaginedeck-pins-v1';
+const IMAGINEDECK_PIN_CACHE_PREFIX = 'museum-portal-imaginedeck-load-v1-';
+const IMAGINEDECK_PIN_MAX_AGE_MS = 15 * 60 * 1000;
 
 const ATOMIC_IMAGINEDECK_ASSET_PATHS = new Set([
   '/imaginedeck/app.html',
@@ -69,6 +74,7 @@ const CORE_ASSETS_TO_CACHE = [
 ];
 
 let normalAssetSetRefreshPromise = null;
+let atomicAssetOperationChain = Promise.resolve();
 
 // 2. Event Listeners
 // --------------------------------------------------
@@ -106,7 +112,8 @@ self.addEventListener('activate', (evt) => {
   const currentCaches = [
     CORE_CACHE_NAME,
     API_CACHE_NAME,
-    IMAGINEDECK_ASSET_CACHE_NAME
+    IMAGINEDECK_ASSET_CACHE_NAME,
+    IMAGINEDECK_PIN_METADATA_CACHE_NAME
   ];
 
   evt.waitUntil(
@@ -114,13 +121,17 @@ self.addEventListener('activate', (evt) => {
       .then(() => caches.keys())
       .then((cacheNames) => Promise.all(
         cacheNames.map((cacheName) => {
-          if (!currentCaches.includes(cacheName)) {
+          if (
+            !currentCaches.includes(cacheName) &&
+            !cacheName.startsWith(IMAGINEDECK_PIN_CACHE_PREFIX)
+          ) {
             console.log(`[ServiceWorker] Deleting old cache: ${cacheName}`);
             return caches.delete(cacheName);
           }
           return undefined;
         })
       ))
+      .then(() => cleanupExpiredImagineDeckPins())
       .then(() => {
         console.log('[ServiceWorker] Activation complete. Starting API pre-caching in background.');
         precacheApiContent();
@@ -149,7 +160,7 @@ self.addEventListener('fetch', (evt) => {
     requestUrl.origin === self.location.origin &&
     NETWORK_FIRST_ASSET_PATHS.has(requestUrl.pathname)
   ) {
-    evt.respondWith(handleNetworkFirstAssetRequest(request));
+    evt.respondWith(handleNetworkFirstAssetRequest(request, evt));
     return;
   }
 
@@ -331,12 +342,18 @@ async function promoteNormalStagingCache() {
   }
 }
 
+function runSerializedAtomicAssetOperation(operation) {
+  const operationPromise = atomicAssetOperationChain.then(operation, operation);
+  atomicAssetOperationChain = operationPromise.catch(() => {});
+  return operationPromise;
+}
+
 async function refreshAtomicAssetSetFromNetwork() {
   if (normalAssetSetRefreshPromise) {
     return normalAssetSetRefreshPromise;
   }
 
-  normalAssetSetRefreshPromise = (async () => {
+  normalAssetSetRefreshPromise = runSerializedAtomicAssetOperation(async () => {
     await caches.delete(IMAGINEDECK_NORMAL_STAGING_CACHE_NAME);
     const stagingCache = await caches.open(IMAGINEDECK_NORMAL_STAGING_CACHE_NAME);
 
@@ -356,19 +373,174 @@ async function refreshAtomicAssetSetFromNetwork() {
     } finally {
       await caches.delete(IMAGINEDECK_NORMAL_STAGING_CACHE_NAME);
     }
-  })().finally(() => {
+  }).finally(() => {
     normalAssetSetRefreshPromise = null;
   });
 
   return normalAssetSetRefreshPromise;
 }
 
+function imagineDeckPinMetadataRequest(clientId) {
+  const url = new URL(
+    `/__imaginedeck-client-pin__/${encodeURIComponent(clientId)}`,
+    self.location.origin
+  );
+  return new Request(url.href);
+}
+
+async function readImagineDeckClientPin(clientId) {
+  if (!clientId) {
+    return null;
+  }
+
+  const metadataCache = await caches.open(IMAGINEDECK_PIN_METADATA_CACHE_NAME);
+  const metadataRequest = imagineDeckPinMetadataRequest(clientId);
+  const response = await metadataCache.match(metadataRequest);
+  if (!response) {
+    return null;
+  }
+
+  try {
+    const pin = await response.json();
+    if (
+      typeof pin.cacheName !== 'string' ||
+      typeof pin.createdAt !== 'number' ||
+      Date.now() - pin.createdAt > IMAGINEDECK_PIN_MAX_AGE_MS
+    ) {
+      await metadataCache.delete(metadataRequest);
+      if (typeof pin.cacheName === 'string') {
+        await caches.delete(pin.cacheName);
+      }
+      return null;
+    }
+    return pin;
+  } catch (error) {
+    await metadataCache.delete(metadataRequest);
+    return null;
+  }
+}
+
+async function cleanupExpiredImagineDeckPins() {
+  const metadataCache = await caches.open(IMAGINEDECK_PIN_METADATA_CACHE_NAME);
+  const metadataRequests = await metadataCache.keys();
+
+  for (const metadataRequest of metadataRequests) {
+    const response = await metadataCache.match(metadataRequest);
+    if (!response) {
+      continue;
+    }
+
+    try {
+      const pin = await response.json();
+      if (
+        typeof pin.cacheName !== 'string' ||
+        typeof pin.createdAt !== 'number' ||
+        Date.now() - pin.createdAt > IMAGINEDECK_PIN_MAX_AGE_MS
+      ) {
+        await metadataCache.delete(metadataRequest);
+        if (typeof pin.cacheName === 'string') {
+          await caches.delete(pin.cacheName);
+        }
+      }
+    } catch (error) {
+      await metadataCache.delete(metadataRequest);
+    }
+  }
+}
+
+async function pinActiveImagineDeckGeneration(clientId) {
+  if (!clientId) {
+    return null;
+  }
+
+  return runSerializedAtomicAssetOperation(async () => {
+    const metadataCache = await caches.open(IMAGINEDECK_PIN_METADATA_CACHE_NAME);
+    const metadataRequest = imagineDeckPinMetadataRequest(clientId);
+    const previousPinResponse = await metadataCache.match(metadataRequest);
+    let previousCacheName = null;
+
+    if (previousPinResponse) {
+      try {
+        const previousPin = await previousPinResponse.json();
+        previousCacheName =
+          typeof previousPin.cacheName === 'string'
+            ? previousPin.cacheName
+            : null;
+      } catch (error) {
+        previousCacheName = null;
+      }
+    }
+
+    const activeCache = await caches.open(IMAGINEDECK_ASSET_CACHE_NAME);
+    const entries = await Promise.all(
+      [...ATOMIC_IMAGINEDECK_ASSET_PATHS].map(async pathname => {
+        const request = stableImagineDeckRequest(pathname);
+        const response = await activeCache.match(request);
+        if (!response) {
+          throw new Error(`Active ImagineDeck response missing for ${pathname}`);
+        }
+        return { request, response };
+      })
+    );
+
+    const cacheName =
+      `${IMAGINEDECK_PIN_CACHE_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const pinnedCache = await caches.open(cacheName);
+
+    try {
+      for (const entry of entries) {
+        await pinnedCache.put(entry.request, entry.response.clone());
+      }
+
+      await metadataCache.put(
+        metadataRequest,
+        new Response(
+          JSON.stringify({
+            cacheName,
+            createdAt: Date.now()
+          }),
+          {
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+      );
+    } catch (error) {
+      await caches.delete(cacheName);
+      throw error;
+    }
+
+    if (previousCacheName && previousCacheName !== cacheName) {
+      await caches.delete(previousCacheName);
+    }
+
+    return cacheName;
+  });
+}
+
+async function matchPinnedImagineDeckResponse(clientId, request) {
+  const pin = await readImagineDeckClientPin(clientId);
+  if (!pin) {
+    return null;
+  }
+
+  const pinnedCache = await caches.open(pin.cacheName);
+  const response = await pinnedCache.match(request);
+  if (response) {
+    return response;
+  }
+
+  const metadataCache = await caches.open(IMAGINEDECK_PIN_METADATA_CACHE_NAME);
+  await metadataCache.delete(imagineDeckPinMetadataRequest(clientId));
+  await caches.delete(pin.cacheName);
+  return null;
+}
+
 /**
- * Handles monitored ImagineDeck resources with coherent active-set delivery.
- * Ordinary requests may trigger a complete atomic refresh, but never write one
- * iframe asset at a time into the active cache.
+ * Serves a coherent ImagineDeck generation. app.html navigation creates an
+ * immutable per-client snapshot; its CSS, JS, heartbeat, and image requests
+ * remain pinned to that snapshot even if another tab promotes a newer active set.
  */
-async function handleNetworkFirstAssetRequest(request) {
+async function handleNetworkFirstAssetRequest(request, evt) {
   const requestUrl = new URL(request.url);
   const stableRequest = stableImagineDeckRequest(request.url);
   const cache = await caches.open(IMAGINEDECK_ASSET_CACHE_NAME);
@@ -377,78 +549,144 @@ async function handleNetworkFirstAssetRequest(request) {
     request.headers.get(IMAGINEDECK_REQUIRE_NETWORK_HEADER) === '1';
   const stageOnly =
     request.headers.get(IMAGINEDECK_STAGE_ONLY_HEADER) === '1';
+  const promoteAtomic =
+    request.headers.get(IMAGINEDECK_PROMOTE_ATOMIC_HEADER) === '1';
   const isAtomicAsset =
     ATOMIC_IMAGINEDECK_ASSET_PATHS.has(requestUrl.pathname);
+  const isGenerationDocument =
+    isAtomicAsset &&
+    requestUrl.pathname === IMAGINEDECK_DOCUMENT_PATH &&
+    request.mode === 'navigate';
 
-  try {
-    const networkResponse = await fetch(request, { cache: 'reload' });
-
-    if (networkResponse && networkResponse.status === 200) {
-      if (requireNetwork || stageOnly) {
-        return networkResponse;
-      }
-
-      if (isAtomicAsset) {
-        if (!cachedResponse) {
-          try {
-            await refreshAtomicAssetSetFromNetwork();
-            return (await cache.match(stableRequest)) || networkResponse;
-          } catch (error) {
-            console.warn('[ServiceWorker] Failed to establish a complete initial ImagineDeck asset set.', error);
-            return networkResponse;
-          }
-        }
-
-        const sameAsset = await responsesRepresentSameAsset(
-          networkResponse.clone(),
-          cachedResponse.clone()
-        );
-
-        if (!sameAsset) {
-          try {
-            await refreshAtomicAssetSetFromNetwork();
-            return (await cache.match(stableRequest)) || cachedResponse;
-          } catch (error) {
-            console.warn(
-              `[ServiceWorker] Complete ImagineDeck asset refresh failed; retaining active set for ${requestUrl.pathname}.`,
-              error
-            );
-            return cachedResponse;
-          }
-        }
-
-        return networkResponse;
-      }
-
-      await cache.put(stableRequest, networkResponse.clone());
-      return networkResponse;
-    }
-
-    if (requireNetwork || stageOnly) {
-      return networkResponse;
-    }
-
-    return cachedResponse || networkResponse;
-  } catch (error) {
-    if (requireNetwork || stageOnly) {
+  if (requireNetwork || stageOnly) {
+    try {
+      return await fetch(request, { cache: 'reload' });
+    } catch (error) {
       return new Response(`Network required: Failed to fetch ${request.url}`, {
         status: 503,
         statusText: 'Service Unavailable',
         headers: { 'Content-Type': 'text/plain' }
       });
     }
+  }
 
-    console.log(`[ServiceWorker] Network failed for ImagineDeck asset. Trying cache for: ${request.url}`);
+  if (!isAtomicAsset) {
+    try {
+      const networkResponse = await fetch(request, { cache: 'reload' });
+      if (networkResponse && networkResponse.status === 200) {
+        await cache.put(stableRequest, networkResponse.clone());
+        return networkResponse;
+      }
+      return cachedResponse || networkResponse;
+    } catch (error) {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return new Response(`Offline: Failed to fetch ${request.url}`, {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'text/plain' }
+      });
+    }
+  }
+
+  if (promoteAtomic) {
+    try {
+      await refreshAtomicAssetSetFromNetwork();
+      const promotedResponse = await cache.match(stableRequest);
+      if (promotedResponse) {
+        return promotedResponse;
+      }
+      throw new Error('Promoted ImagineDeck response is missing.');
+    } catch (error) {
+      console.warn(
+        '[ServiceWorker] Explicit ImagineDeck generation promotion failed.',
+        error
+      );
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return new Response(`Atomic promotion failed for ${request.url}`, {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'text/plain' }
+      });
+    }
+  }
+
+  if (!isGenerationDocument) {
+    const pinnedResponse = await matchPinnedImagineDeckResponse(
+      evt?.clientId || '',
+      stableRequest
+    );
+    if (pinnedResponse) {
+      return pinnedResponse;
+    }
 
     if (cachedResponse) {
       return cachedResponse;
     }
 
-    return new Response(`Offline: Failed to fetch ${request.url}`, {
+    try {
+      await refreshAtomicAssetSetFromNetwork();
+      const initializedResponse = await cache.match(stableRequest);
+      if (initializedResponse) {
+        return initializedResponse;
+      }
+      throw new Error('Initialized ImagineDeck response is missing.');
+    } catch (error) {
+      console.warn(
+        `[ServiceWorker] Failed to establish an initial ImagineDeck generation for ${requestUrl.pathname}.`,
+        error
+      );
+      return new Response(`No coherent ImagineDeck generation for ${request.url}`, {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'text/plain' }
+      });
+    }
+  }
+
+  if (evt?.waitUntil) {
+    evt.waitUntil(cleanupExpiredImagineDeckPins().catch(() => {}));
+  }
+
+  let activeDocumentResponse = cachedResponse;
+  if (!activeDocumentResponse) {
+    try {
+      await refreshAtomicAssetSetFromNetwork();
+      activeDocumentResponse = await cache.match(stableRequest);
+    } catch (error) {
+      console.warn(
+        '[ServiceWorker] Failed to establish the initial ImagineDeck document generation.',
+        error
+      );
+    }
+  }
+
+  if (!activeDocumentResponse) {
+    return new Response(`No coherent ImagineDeck generation for ${request.url}`, {
       status: 503,
       statusText: 'Service Unavailable',
       headers: { 'Content-Type': 'text/plain' }
     });
+  }
+
+  const navigationClientId = evt?.resultingClientId || evt?.clientId || '';
+  if (!navigationClientId) {
+    return activeDocumentResponse;
+  }
+
+  try {
+    const pinnedCacheName = await pinActiveImagineDeckGeneration(navigationClientId);
+    const pinnedCache = await caches.open(pinnedCacheName);
+    return (await pinnedCache.match(stableRequest)) || activeDocumentResponse;
+  } catch (error) {
+    console.warn(
+      '[ServiceWorker] Failed to pin the ImagineDeck generation for this navigation.',
+      error
+    );
+    return activeDocumentResponse;
   }
 }
 
