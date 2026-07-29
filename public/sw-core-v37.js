@@ -130,9 +130,15 @@ self.addEventListener('install', (evt) => {
             if (response.status === 200 || response.type === 'opaque') {
               await cache.put(assetUrl, response);
             } else {
+              if (CORE_REQUIRED_ASSETS.has(assetUrl)) {
+                failedRequiredAssets.push(assetUrl);
+              }
               console.warn(`[ServiceWorker] Skipped caching ${assetUrl} - non-ok status: ${response.status}`);
             }
           } catch (err) {
+            if (CORE_REQUIRED_ASSETS.has(assetUrl)) {
+              failedRequiredAssets.push(assetUrl);
+            }
             console.warn(`[ServiceWorker] Failed to fetch and cache '${assetUrl}'.`, err);
           }
         })();
