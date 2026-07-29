@@ -5,3 +5,4 @@ importScripts('/sw-core-v34.js');
 importScripts('/sw-imaginedeck-generation-v43.js');
 importScripts('/sw-imaginedeck-network-v36.js');
 importScripts('/sw-imaginedeck-refresh-timeout-v43.js');
+importScripts('/sw-imaginedeck-navigation-retry-v44.js');
