@@ -474,7 +474,6 @@
         }
 
         reloadInProgress = true;
-
         try {
             let preparedSignature = null;
 
@@ -483,7 +482,7 @@
                     preparedSignature = await prepareMonitoredAssets(options.assetSignature);
                 } catch (error) {
                     console.warn(
-                        '[ImagineDeck Watchdog] Failed to prepare a complete monitored asset set; retaining the active cached set.',
+                        '[ImagineDeck Watchdog] Failed to prepare a coherent monitored asset set; retaining the active set.',
                         error
                     );
                     return false;
@@ -504,12 +503,7 @@
                 if (!stateConfirmed || !childStateKnown || childBusy) {
                     console.info(
                         '[ImagineDeck Watchdog] Content update reload deferred after final state check.',
-                        {
-                            stateConfirmed,
-                            childStateKnown,
-                            childBusy,
-                            childHeartbeatVersion
-                        }
+                        { stateConfirmed, childStateKnown, childBusy, childHeartbeatVersion }
                     );
                     return false;
                 }
@@ -537,7 +531,6 @@
             }
 
             const stableAppUrl = new URL(APP_URL, window.location.href).href;
-
             console.warn('[ImagineDeck Watchdog] Reloading iframe.', {
                 reason,
                 awaitingAssetConfirmation: preparedSignature !== null
@@ -586,6 +579,21 @@
         }
     }
 
+    async function reconcileActiveSetWithLoadedSignature(currentSignature) {
+        const activeSignature = await readActiveAssetSignature();
+        if (activeSignature === currentSignature) {
+            return true;
+        }
+
+        console.info(
+            '[ImagineDeck Watchdog] Reconciling the active cache with the currently loaded server signature.',
+            { currentSignature, activeSignature }
+        );
+
+        const reconciledSignature = await prepareMonitoredAssets(currentSignature);
+        return reconciledSignature === currentSignature;
+    }
+
     async function checkForContentUpdate() {
         if (updateCheckInProgress) {
             return;
@@ -607,6 +615,12 @@
             }
 
             if (currentSignature === loadedAssetSignature) {
+                const reconciled = await reconcileActiveSetWithLoadedSignature(currentSignature);
+                if (!reconciled) {
+                    pendingAssetSignature = currentSignature;
+                    return;
+                }
+
                 pendingAssetSignature = null;
                 if (
                     confirmationSignature !== null &&
