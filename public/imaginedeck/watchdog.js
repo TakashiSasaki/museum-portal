@@ -410,17 +410,24 @@
         void applyPendingUpdateIfSafe();
     }
 
+    function beginAssetConfirmation(signature) {
+        confirmationSignature = signature;
+        confirmationLoadSeen = false;
+        clearAssetConfirmationTimer();
+        confirmationTimeoutId = setTimeout(
+            () => abandonAssetConfirmation(
+                'timed out waiting for iframe navigation and an asset-ready heartbeat'
+            ),
+            ASSET_CONFIRM_TIMEOUT_MS
+        );
+    }
+
     function beginAssetConfirmationAfterLoad() {
         if (confirmationSignature === null) {
             return;
         }
 
         confirmationLoadSeen = true;
-        clearAssetConfirmationTimer();
-        confirmationTimeoutId = setTimeout(
-            () => abandonAssetConfirmation('timed out waiting for an asset-ready heartbeat'),
-            ASSET_CONFIRM_TIMEOUT_MS
-        );
     }
 
     function commitConfirmedAssetSignature(message) {
@@ -531,9 +538,7 @@
             childHeartbeatVersion = null;
 
             if (preparedSignature !== null) {
-                confirmationSignature = preparedSignature;
-                confirmationLoadSeen = false;
-                clearAssetConfirmationTimer();
+                beginAssetConfirmation(preparedSignature);
             }
 
             const stableAppUrl = new URL(APP_URL, window.location.href).href;
