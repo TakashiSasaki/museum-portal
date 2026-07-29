@@ -488,6 +488,7 @@
         let upcomingPages = [];
         let pastPages = [];
         let noticeAutoPlayInterval;
+        let feedRefreshInProgress = false;
 
         function getTypeLabel(type) {
             switch(type) {
@@ -661,6 +662,19 @@
             }
         }
 
+        async function refreshFeedsWhenIdle() {
+            if (isSwRunning || isTimerRunning || feedRefreshInProgress) {
+                return;
+            }
+
+            feedRefreshInProgress = true;
+            try {
+                await initFeeds();
+            } finally {
+                feedRefreshInProgress = false;
+            }
+        }
+
         function renderNoticeTab(tab) {
             currentTab = tab;
 
@@ -775,4 +789,5 @@
         });
 
         // 起動
-        initFeeds();
+        refreshFeedsWhenIdle();
+        setInterval(refreshFeedsWhenIdle, 3600000);
