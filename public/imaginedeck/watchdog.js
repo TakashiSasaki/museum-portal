@@ -19,6 +19,7 @@
     const STAGE_ONLY_HEADER = 'X-ImagineDeck-Stage-Only';
     const PROMOTE_ATOMIC_HEADER = 'X-ImagineDeck-Promote-Atomic';
     const ACTIVE_ASSET_CACHE_NAME = 'museum-portal-imaginedeck-assets-v1';
+    const PINNED_SIGNATURE_META_NAME = 'imaginedeck-pinned-asset-signature';
     const MONITORED_ASSET_URLS = [
         './app.html',
         './index.js',
@@ -432,6 +433,24 @@
         }
     }
 
+    function readPinnedAssetSignatureFromFrame() {
+        try {
+            const encodedSignature = frame.contentDocument
+                ?.querySelector(`meta[name="${PINNED_SIGNATURE_META_NAME}"]`)
+                ?.getAttribute('content');
+            if (!encodedSignature) {
+                return null;
+            }
+            return decodeURIComponent(encodedSignature);
+        } catch (error) {
+            console.warn(
+                '[ImagineDeck Watchdog] Failed to read the iframe generation signature.',
+                error
+            );
+            return null;
+        }
+    }
+
     function commitConfirmedAssetSignature(message) {
         if (
             confirmationSignature === null ||
@@ -439,6 +458,19 @@
             message.assetsReady !== true ||
             childHeartbeatVersion < REQUIRED_CHILD_HEARTBEAT_VERSION
         ) {
+            return false;
+        }
+
+        const pinnedAssetSignature = readPinnedAssetSignatureFromFrame();
+        if (pinnedAssetSignature === null) {
+            return false;
+        }
+
+        if (pinnedAssetSignature !== confirmationSignature) {
+            pendingAssetSignature = pinnedAssetSignature;
+            abandonAssetConfirmation(
+                'iframe confirmed a different pinned asset generation'
+            );
             return false;
         }
 
@@ -717,6 +749,8 @@
                     {
                         assetsReady: message.assetsReady,
                         assetStatus: message.assetStatus,
+                        pinnedAssetSignature: readPinnedAssetSignatureFromFrame(),
+                        expectedAssetSignature: confirmationSignature,
                         childHeartbeatVersion
                     }
                 );
