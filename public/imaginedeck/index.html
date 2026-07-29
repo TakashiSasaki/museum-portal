@@ -77,15 +77,26 @@
             }
 
             function waitForWorkerActivation(worker) {
-                if (!worker || worker.state === 'activated' || worker.state === 'redundant') {
+                if (!worker || worker.state === 'activated') {
                     return Promise.resolve();
+                }
+                if (worker.state === 'redundant') {
+                    return Promise.reject(
+                        new Error('Service Worker became redundant before activation')
+                    );
                 }
 
                 return withTimeout(
-                    new Promise(resolve => {
+                    new Promise((resolve, reject) => {
                         worker.addEventListener('statechange', () => {
-                            if (worker.state === 'activated' || worker.state === 'redundant') {
+                            if (worker.state === 'activated') {
                                 resolve();
+                            } else if (worker.state === 'redundant') {
+                                reject(
+                                    new Error(
+                                        'Service Worker became redundant before activation'
+                                    )
+                                );
                             }
                         });
                     }),
@@ -94,22 +105,48 @@
                 );
             }
 
-            function waitForController() {
-                if (navigator.serviceWorker.controller) {
+            function waitForController(expectedWorker) {
+                const isExpectedController = () => {
+                    const controller = navigator.serviceWorker.controller;
+                    return Boolean(
+                        controller &&
+                        (!expectedWorker || controller === expectedWorker)
+                    );
+                };
+
+                if (isExpectedController()) {
                     return Promise.resolve();
                 }
 
-                return withTimeout(
-                    new Promise(resolve => {
-                        navigator.serviceWorker.addEventListener(
+                return new Promise((resolve, reject) => {
+                    const onControllerChange = () => {
+                        if (!isExpectedController()) {
+                            return;
+                        }
+                        clearTimeout(timeoutId);
+                        navigator.serviceWorker.removeEventListener(
                             'controllerchange',
-                            resolve,
-                            { once: true }
+                            onControllerChange
                         );
-                    }),
-                    CONTROL_TIMEOUT_MS,
-                    'Service Worker controller acquisition'
-                );
+                        resolve();
+                    };
+                    const timeoutId = setTimeout(() => {
+                        navigator.serviceWorker.removeEventListener(
+                            'controllerchange',
+                            onControllerChange
+                        );
+                        reject(
+                            new Error(
+                                `Service Worker controller acquisition timed out after ${CONTROL_TIMEOUT_MS} ms`
+                            )
+                        );
+                    }, CONTROL_TIMEOUT_MS);
+
+                    navigator.serviceWorker.addEventListener(
+                        'controllerchange',
+                        onControllerChange
+                    );
+                });
             }
 
             async function ensurePortalServiceWorker() {
@@ -130,10 +167,26 @@
                     SERVICE_WORKER_BOOTSTRAP_TIMEOUT_MS,
                     'Service Worker update'
                 );
-                await waitForWorkerActivation(
-                    registration.installing || registration.waiting
-                );
-                await waitForController();
+
+                const updateCandidate =
+                    registration.installing || registration.waiting;
+                let expectedController = registration.active;
+
+                if (updateCandidate) {
+                    await waitForWorkerActivation(updateCandidate);
+                    expectedController = updateCandidate;
+                }
+
+                if (!expectedController) {
+                    throw new Error(
+                        'Service Worker update completed without an active worker'
+                    );
+                }
+
+                // Do not accept an arbitrary pre-existing controller here. A
+                // returning visitor may still be controlled by the previous
+                // worker while the newly checked worker is activating.
+                await waitForController(expectedController);
             }
 
             function loadWatchdog() {
@@ -193,7 +246,9 @@
                 bootstrapInProgress = true;
                 try {
                     await ensurePortalServiceWorker();
-                    startAppNavigation('portal Service Worker is controlling the page');
+                    startAppNavigation(
+                        'updated portal Service Worker is controlling the page'
+                    );
                     notifyServiceWorkerReady('bootstrap completed');
                 } catch (error) {
                     console.warn(
@@ -216,18 +271,8 @@
                 return;
             }
 
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                if (!navigator.serviceWorker.controller) {
-                    return;
-                }
-                startAppNavigation('controller acquired');
-                notifyServiceWorkerReady('controller changed');
-            });
-
-            if (navigator.serviceWorker.controller) {
-                startAppNavigation('existing controller');
-            }
-
+            // Even when a controller already exists, keep the iframe blank until
+            // registration.update() confirms which active worker must control it.
             void startServiceWorkerBootstrap();
         })();
     </script>
