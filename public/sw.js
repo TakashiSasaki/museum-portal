@@ -4,4 +4,4 @@
 importScripts('/sw-core-v34.js');
 importScripts('/sw-imaginedeck-generation-v36.js');
 importScripts('/sw-imaginedeck-network-v36.js');
-importScripts('/sw-imaginedeck-refresh-timeout-v40.js');
+importScripts('/sw-imaginedeck-refresh-timeout-v41.js');
