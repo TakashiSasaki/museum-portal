@@ -46,23 +46,46 @@
 
             const SERVICE_WORKER_URL = '/sw.js';
             const SERVICE_WORKER_SCOPE = '/';
+            const SERVICE_WORKER_BOOTSTRAP_TIMEOUT_MS = 15_000;
             const ACTIVATION_TIMEOUT_MS = 10_000;
             const CONTROL_TIMEOUT_MS = 5_000;
+
+            function withTimeout(promise, timeoutMs, label) {
+                return new Promise((resolve, reject) => {
+                    const timeoutId = setTimeout(
+                        () => reject(new Error(`${label} timed out after ${timeoutMs} ms`)),
+                        timeoutMs
+                    );
+
+                    Promise.resolve(promise).then(
+                        value => {
+                            clearTimeout(timeoutId);
+                            resolve(value);
+                        },
+                        error => {
+                            clearTimeout(timeoutId);
+                            reject(error);
+                        }
+                    );
+                });
+            }
 
             function waitForWorkerActivation(worker) {
                 if (!worker || worker.state === 'activated' || worker.state === 'redundant') {
                     return Promise.resolve();
                 }
 
-                return new Promise(resolve => {
-                    const timeoutId = setTimeout(resolve, ACTIVATION_TIMEOUT_MS);
-                    worker.addEventListener('statechange', () => {
-                        if (worker.state === 'activated' || worker.state === 'redundant') {
-                            clearTimeout(timeoutId);
-                            resolve();
-                        }
-                    });
-                });
+                return withTimeout(
+                    new Promise(resolve => {
+                        worker.addEventListener('statechange', () => {
+                            if (worker.state === 'activated' || worker.state === 'redundant') {
+                                resolve();
+                            }
+                        });
+                    }),
+                    ACTIVATION_TIMEOUT_MS,
+                    'Service Worker activation'
+                );
             }
 
             function waitForController() {
@@ -70,13 +93,17 @@
                     return Promise.resolve();
                 }
 
-                return new Promise(resolve => {
-                    const timeoutId = setTimeout(resolve, CONTROL_TIMEOUT_MS);
-                    navigator.serviceWorker.addEventListener('controllerchange', () => {
-                        clearTimeout(timeoutId);
-                        resolve();
-                    }, { once: true });
-                });
+                return withTimeout(
+                    new Promise(resolve => {
+                        navigator.serviceWorker.addEventListener(
+                            'controllerchange',
+                            resolve,
+                            { once: true }
+                        );
+                    }),
+                    CONTROL_TIMEOUT_MS,
+                    'Service Worker controller acquisition'
+                );
             }
 
             async function ensurePortalServiceWorker() {
@@ -109,14 +136,21 @@
                 document.body.append(script);
             }
 
-            ensurePortalServiceWorker()
-                .catch(error => {
-                    console.warn(
-                        '[ImagineDeck Bootstrap] Service Worker registration or update failed.',
-                        error
-                    );
-                })
-                .finally(loadWatchdog);
+            // Watchdog availability must not depend on registration/update latency.
+            loadWatchdog();
+
+            void withTimeout(
+                ensurePortalServiceWorker(),
+                SERVICE_WORKER_BOOTSTRAP_TIMEOUT_MS,
+                'Service Worker bootstrap'
+            ).then(() => {
+                window.dispatchEvent(new Event('imaginedeck-service-worker-ready'));
+            }).catch(error => {
+                console.warn(
+                    '[ImagineDeck Bootstrap] Service Worker registration or update failed.',
+                    error
+                );
+            });
         })();
     </script>
 </body>
