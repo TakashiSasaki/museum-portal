@@ -488,6 +488,7 @@
         let upcomingPages = [];
         let pastPages = [];
         let noticeAutoPlayInterval;
+        let feedRefreshInProgress = false;
 
         function getTypeLabel(type) {
             switch(type) {
@@ -661,6 +662,19 @@
             }
         }
 
+        async function refreshFeedsWhenIdle() {
+            if (isSwRunning || isTimerRunning || feedRefreshInProgress) {
+                return;
+            }
+
+            feedRefreshInProgress = true;
+            try {
+                await initFeeds();
+            } finally {
+                feedRefreshInProgress = false;
+            }
+        }
+
         function renderNoticeTab(tab) {
             currentTab = tab;
 
@@ -775,15 +789,5 @@
         });
 
         // 起動
-        initFeeds();
-
-        /* =========================================
-           4. 自動リロード処理
-           ========================================= */
-        // 1時間に1回（3600000ミリ秒）リロードを試みる
-        setInterval(() => {
-            // ストップウォッチもタイマーも動いていない場合のみリロードする
-            if (!isSwRunning && !isTimerRunning) {
-                window.location.reload();
-            }
-        }, 3600000);
+        refreshFeedsWhenIdle();
+        setInterval(refreshFeedsWhenIdle, 3600000);
