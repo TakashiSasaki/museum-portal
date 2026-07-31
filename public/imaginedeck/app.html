@@ -486,7 +486,17 @@
                     if (dialog.open) {
                         if (activeReminderStartMs !== null && nowMs >= activeReminderStartMs) {
                             dialog.close('expired');
+                            return;
                         }
+
+                        const currentCandidate = dueReminders(nowMs)
+                            .find(candidate => candidate.key === activeReminderKey);
+                        if (!currentCandidate) {
+                            dialog.close('stale');
+                            return;
+                        }
+
+                        renderReminder(currentCandidate);
                         return;
                     }
 
