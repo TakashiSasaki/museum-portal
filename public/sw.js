@@ -6,3 +6,4 @@ importScripts('/sw-imaginedeck-generation-v45.js');
 importScripts('/sw-imaginedeck-network-v36.js');
 importScripts('/sw-imaginedeck-refresh-timeout-v43.js');
 importScripts('/sw-imaginedeck-navigation-retry-v44.js');
+importScripts('/sw-imaginedeck-json-endpoints-v1.js');
