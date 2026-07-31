@@ -1,4 +1,5 @@
-const FEED_BASE = 'https://imaginedeck.igsrr.org/feed';
+const UPCOMING_JSON_URL = 'https://imagine-deck-feed.firebaseapp.com/upcoming.json';
+const PAST_JSON_URL = 'https://imagine-deck-feed.firebaseapp.com/past.json';
 
 function normalizeItem(raw) {
     return {
@@ -53,17 +54,18 @@ function mergeFeeds(upcomingFeed, pastFeed) {
 
 async function loadMergedEvents({ upcomingLimit = 20, pastLimit = 50 } = {}) {
     try {
-        const u = `${FEED_BASE}/upcoming.json?limit=${upcomingLimit}`;
-        const p = `${FEED_BASE}/past.json?limit=${pastLimit}`;
         const [ur, pr] = await Promise.all([
-            fetch(u, {cache:'no-store'}).catch(e => { console.warn('[DEBUG] Failed to fetch upcoming feed', e); return null; }),
-            fetch(p, {cache:'no-store'}).catch(e => { console.warn('[DEBUG] Failed to fetch past feed', e); return null; })
+            fetch(UPCOMING_JSON_URL, {cache:'no-store'}).catch(e => { console.warn('[DEBUG] Failed to fetch upcoming JSON', e); return null; }),
+            fetch(PAST_JSON_URL, {cache:'no-store'}).catch(e => { console.warn('[DEBUG] Failed to fetch past JSON', e); return null; })
         ]);
 
         const uf = (ur && ur.ok) ? await ur.json().catch(e => { console.warn('[DEBUG] Failed to parse upcoming JSON', e); return null; }) : null;
         const pf = (pr && pr.ok) ? await pr.json().catch(e => { console.warn('[DEBUG] Failed to parse past JSON', e); return null; }) : null;
+        const data = mergeFeeds(uf, pf);
+        const upcoming = data.upcoming.slice(0, upcomingLimit);
+        const past = data.past.slice(0, pastLimit);
 
-        return mergeFeeds(uf, pf);
+        return { merged: [...upcoming, ...past], upcoming, past };
     } catch (error) {
         console.warn('[DEBUG] Failed to load merged events', error);
         return { merged: [], upcoming: [], past: [] };
