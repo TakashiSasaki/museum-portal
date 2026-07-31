@@ -38,8 +38,7 @@
                 radial-gradient(circle at top right, rgba(255, 225, 250, 0.95), transparent 42%),
                 linear-gradient(145deg, #ffffff 0%, #f8eff8 100%);
             box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.45);
-            overflow: auto;
-            overscroll-behavior: contain;
+            overflow: hidden;
         }
 
         .event-reminder-kicker {
@@ -56,6 +55,10 @@
             font-size: clamp(1.5rem, 5vw, 2.5rem);
             line-height: 1.25;
             overflow-wrap: anywhere;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+            overflow: hidden;
         }
 
         .event-reminder-badges {
@@ -92,6 +95,10 @@
             font-size: clamp(1.05rem, 3.6vw, 1.5rem);
             font-weight: 700;
             line-height: 1.5;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
         }
 
         .event-reminder-organizer,
@@ -100,8 +107,19 @@
             color: #4a3e4e;
             font-size: clamp(0.95rem, 3vw, 1.2rem);
             line-height: 1.65;
-            white-space: pre-wrap;
+            white-space: normal;
             overflow-wrap: anywhere;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .event-reminder-organizer {
+            -webkit-line-clamp: 2;
+        }
+
+        .event-reminder-excerpt {
+            -webkit-line-clamp: 4;
         }
 
         .event-reminder-organizer::before {
@@ -111,6 +129,7 @@
 
         .event-reminder-close {
             align-self: stretch;
+            flex-shrink: 0;
             min-height: 3rem;
             margin-top: 0.25rem;
             border: 0;
@@ -143,11 +162,20 @@
 
             .event-reminder-heading {
                 font-size: clamp(1.2rem, 4vw, 1.8rem);
+                -webkit-line-clamp: 2;
             }
 
             .event-reminder-organizer,
             .event-reminder-excerpt {
                 line-height: 1.4;
+            }
+
+            .event-reminder-organizer {
+                -webkit-line-clamp: 1;
+            }
+
+            .event-reminder-excerpt {
+                -webkit-line-clamp: 2;
             }
         }
     </style>
@@ -330,6 +358,7 @@
                 }
 
                 let activeReminderKey = null;
+                let activeReminderStartMs = null;
                 let checkingReminder = false;
                 const dismissedReminderKeys = loadDismissedReminderKeys();
 
@@ -445,20 +474,30 @@
                     setOptionalText(organizerElement, event.organizer);
                     setOptionalText(excerptElement, event.excerpt);
                     activeReminderKey = candidate.key;
+                    activeReminderStartMs = candidate.startMs;
                 }
 
                 function showNextReminder() {
-                    if (checkingReminder || dialog.open) {
+                    if (checkingReminder) {
+                        return;
+                    }
+
+                    const nowMs = Date.now();
+                    if (dialog.open) {
+                        if (activeReminderStartMs !== null && nowMs >= activeReminderStartMs) {
+                            dialog.close('expired');
+                        }
                         return;
                     }
 
                     checkingReminder = true;
                     try {
-                        const [candidate] = dueReminders(Date.now());
+                        const [candidate] = dueReminders(nowMs);
                         if (!candidate) {
                             return;
                         }
                         renderReminder(candidate);
+                        dialog.returnValue = '';
                         dialog.showModal();
                     } finally {
                         checkingReminder = false;
@@ -472,6 +511,11 @@
                 }
 
                 closeButton.addEventListener('click', closeReminder);
+
+                dialog.addEventListener('cancel', event => {
+                    event.preventDefault();
+                    closeReminder();
+                });
 
                 dialog.addEventListener('click', event => {
                     if (event.target !== dialog) {
@@ -489,11 +533,12 @@
                 });
 
                 dialog.addEventListener('close', () => {
-                    if (activeReminderKey) {
+                    if (dialog.returnValue === 'dismissed' && activeReminderKey) {
                         dismissedReminderKeys.add(activeReminderKey);
                         saveDismissedReminderKeys();
                     }
                     activeReminderKey = null;
+                    activeReminderStartMs = null;
                     queueMicrotask(showNextReminder);
                 });
 
