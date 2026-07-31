@@ -80,6 +80,12 @@
             background: #7a1d1d;
         }
 
+        .event-reminder-badge[hidden],
+        .event-reminder-organizer[hidden],
+        .event-reminder-excerpt[hidden] {
+            display: none;
+        }
+
         .event-reminder-datetime {
             margin: 0;
             color: #241529;
@@ -303,6 +309,12 @@
             const DISMISSED_STORAGE_KEY = 'imaginedeck-dismissed-event-reminders-v1';
 
             document.addEventListener('DOMContentLoaded', () => {
+                setInterval(() => {
+                    if (typeof refreshFeedsWhenIdle === 'function') {
+                        refreshFeedsWhenIdle();
+                    }
+                }, FEED_REFRESH_INTERVAL_MS);
+
                 const dialog = document.getElementById('event-reminder-dialog');
                 const closeButton = document.getElementById('event-reminder-close');
                 const typeElement = document.getElementById('event-reminder-type');
@@ -487,12 +499,6 @@
 
                 setInterval(showNextReminder, REMINDER_CHECK_INTERVAL_MS);
                 showNextReminder();
-
-                setInterval(() => {
-                    if (typeof refreshFeedsWhenIdle === 'function') {
-                        refreshFeedsWhenIdle();
-                    }
-                }, FEED_REFRESH_INTERVAL_MS);
             });
         })();
     </script>
