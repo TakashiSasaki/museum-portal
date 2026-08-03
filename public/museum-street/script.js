@@ -54,24 +54,28 @@ document.addEventListener('DOMContentLoaded', () => {
         navBackdrop.addEventListener('click', closeMenu);
     }
 
+    // Pre-calculate possible classes to avoid expensive Array manipulations in loops or frequent updates
+    const activeTabClasses = ['bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab'];
+    const inactiveTabClasses = ['bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab'];
+
     const updateTabs = () => {
         if (!tabEvents || !tabMap) return;
         
         if (currentTab === 'events') {
-            tabEvents.classList.add('bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab');
-            tabEvents.classList.remove('bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab');
+            tabEvents.classList.add(...activeTabClasses);
+            tabEvents.classList.remove(...inactiveTabClasses);
             
-            tabMap.classList.add('bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab');
-            tabMap.classList.remove('bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab');
+            tabMap.classList.add(...inactiveTabClasses);
+            tabMap.classList.remove(...activeTabClasses);
 
             contentFrame.classList.remove('hidden');
             mapFrame.classList.add('hidden');
         } else {
-            tabMap.classList.add('bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab');
-            tabMap.classList.remove('bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab');
+            tabMap.classList.add(...activeTabClasses);
+            tabMap.classList.remove(...inactiveTabClasses);
 
-            tabEvents.classList.add('bg-slate-900/40', 'text-slate-400', 'opacity-60', 'hover:opacity-100', 'inactive-tab');
-            tabEvents.classList.remove('bg-slate-800/80', 'text-white', 'shadow-[0_0_10px_rgba(255,255,255,0.1)]', 'active-tab');
+            tabEvents.classList.add(...inactiveTabClasses);
+            tabEvents.classList.remove(...activeTabClasses);
 
             contentFrame.classList.add('hidden');
             mapFrame.classList.remove('hidden');

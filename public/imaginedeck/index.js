@@ -600,9 +600,13 @@
             }
         }
 
+        let resizeTimeout;
         window.addEventListener('resize', () => {
-            calculateNoticePages();
-            renderNoticeTab(currentTab);
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                calculateNoticePages();
+                renderNoticeTab(currentTab);
+            }, 200);
         });
 
         async function initFeeds() {
