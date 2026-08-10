@@ -229,7 +229,13 @@
         if (overlay.hidden || isEffectiveFullscreen()) {
             return;
         }
-        if (event?.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') {
+        if (
+            event?.type === 'keydown' &&
+            event.key !== 'Enter' &&
+            event.key !== ' ' &&
+            event.key !== 'Space' &&
+            event.key !== 'Spacebar'
+        ) {
             return;
         }
         event?.preventDefault?.();
