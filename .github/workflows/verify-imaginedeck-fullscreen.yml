@@ -9,6 +9,7 @@ on:
       - 'public/sw.js'
       - 'public/sw-core-v43.js'
       - 'public/sw-core-v44.js'
+      - 'public/sw-imaginedeck-fullscreen-shell-v1.js'
       - 'test-imaginedeck-fullscreen-guard.cjs'
       - '.github/workflows/verify-imaginedeck-fullscreen.yml'
   workflow_dispatch:
@@ -31,6 +32,8 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check public/imaginedeck/fullscreen-guard.js
+          node --check public/imaginedeck/fullscreen-guard-v2.js
+          node --check public/sw-imaginedeck-fullscreen-shell-v1.js
           node --check public/sw-core-v44.js
           node --check public/sw.js
           node --check test-imaginedeck-fullscreen-guard.cjs
