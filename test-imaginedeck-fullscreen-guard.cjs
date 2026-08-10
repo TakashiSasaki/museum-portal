@@ -6,15 +6,20 @@ const vm = require('node:vm');
 
 const ROOT = process.env.IMAGINEDECK_TEST_ROOT || process.cwd();
 const legacyGuardPath = path.join(ROOT, 'public', 'imaginedeck', 'fullscreen-guard.js');
-const guardPath = path.join(ROOT, 'public', 'imaginedeck', 'fullscreen-guard-v2.js');
 const indexPath = path.join(ROOT, 'public', 'imaginedeck', 'index.html');
 const manifestPath = path.join(ROOT, 'public', 'imaginedeck', 'manifest.json');
 const swPath = path.join(ROOT, 'public', 'sw.js');
-const swFullscreenShellPath = path.join(ROOT, 'public', 'sw-imaginedeck-fullscreen-shell-v1.js');
-const swCorePath = path.join(ROOT, 'public', 'sw-core-v45.js');
-const swCorePreviousPath = path.join(ROOT, 'public', 'sw-core-v44.js');
+const swCorePath = path.join(ROOT, 'public', 'sw-core-v44.js');
+const removedVersionedGuardPath = path.join(ROOT, 'public', 'imaginedeck', 'fullscreen-guard-v2.js');
+const removedFullscreenShellPath = path.join(ROOT, 'public', 'sw-imaginedeck-fullscreen-shell-v1.js');
+const removedCoreV45Path = path.join(ROOT, 'public', 'sw-core-v45.js');
 
-const guardSource = fs.readFileSync(guardPath, 'utf8');
+const indexHtml = fs.readFileSync(indexPath, 'utf8');
+const inlineGuardMatch = indexHtml.match(
+    /<script data-imaginedeck-fullscreen-guard>\s*([\s\S]*?)\s*<\/script>/
+);
+assert.ok(inlineGuardMatch, 'index.html must contain the self-contained fullscreen guard');
+const guardSource = `${inlineGuardMatch[1].trim()}\n`;
 
 class FakeEventTarget {
     constructor() {
@@ -141,7 +146,7 @@ function createHarness({
         Error
     });
 
-    vm.runInContext(guardSource, context, { filename: 'fullscreen-guard-v2.js' });
+    vm.runInContext(guardSource, context, { filename: 'imaginedeck-inline-fullscreen-guard.js' });
 
     return {
         overlay,
@@ -294,42 +299,32 @@ test('unsupported fullscreen API shows an unavailable message instead of a dead 
     assert.equal(harness.requestCalls.length, 0);
 });
 
-test('tap-only guard contains no countdown or timer-driven fullscreen path', () => {
+test('tap-only inline guard contains no countdown or timer-driven fullscreen path', () => {
     assert.doesNotMatch(guardSource, /COUNTDOWN/);
     assert.doesNotMatch(guardSource, /setTimeout|setInterval/);
     assert.doesNotMatch(guardSource, /10秒|remainingSeconds|automatic/);
 });
 
-test('shell wiring uses a fresh core cache generation and keeps the guard outside the atomic ImagineDeck generation', () => {
-    if (!fs.existsSync(legacyGuardPath) || !fs.existsSync(indexPath) ||
-        !fs.existsSync(manifestPath) || !fs.existsSync(swPath) ||
-        !fs.existsSync(swFullscreenShellPath) || !fs.existsSync(swCorePath) ||
-        !fs.existsSync(swCorePreviousPath)) {
-        return;
-    }
-
+test('active v44 worker can cache the new shell without creating an external guard dependency', () => {
     const normalizeNewlines = value => value.replace(/\r\n/g, '\n');
-    const normalizeCoreLayout = value => value
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean)
-        .join('\n');
     const legacyGuard = normalizeNewlines(fs.readFileSync(legacyGuardPath, 'utf8'));
-    const indexHtml = fs.readFileSync(indexPath, 'utf8');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     const sw = fs.readFileSync(swPath, 'utf8');
-    const fullscreenShell = fs.readFileSync(swFullscreenShellPath, 'utf8');
-    const swCore = normalizeNewlines(fs.readFileSync(swCorePath, 'utf8'));
-    const swCorePrevious = normalizeNewlines(fs.readFileSync(swCorePreviousPath, 'utf8'));
+    const swCore = fs.readFileSync(swCorePath, 'utf8');
 
     assert.equal(
-        legacyGuard,
-        normalizeNewlines(guardSource),
-        'legacy and cache-busted fullscreen guard paths must remain behaviorally identical'
+        legacyGuard.trim(),
+        normalizeNewlines(guardSource).trim(),
+        'inline and legacy fullscreen guards must remain behaviorally identical'
     );
 
     assert.match(indexHtml, /rel="manifest" href="\.\/manifest\.json"/);
-    assert.ok(indexHtml.indexOf('./fullscreen-guard-v2.js') < indexHtml.indexOf('./bootstrap-v45.js'));
+    assert.match(indexHtml, /<script data-imaginedeck-fullscreen-guard>/);
+    assert.ok(
+        indexHtml.indexOf('<script data-imaginedeck-fullscreen-guard>') <
+        indexHtml.indexOf('./bootstrap-v45.js')
+    );
+    assert.doesNotMatch(indexHtml, /src="\.\/fullscreen-guard/);
     assert.doesNotMatch(indexHtml, /fullscreen-guard-countdown/);
     assert.doesNotMatch(indexHtml, /aria-live=/);
     assert.match(indexHtml, /aria-labelledby="fullscreen-guard-title fullscreen-guard-message"/);
@@ -339,29 +334,25 @@ test('shell wiring uses a fresh core cache generation and keeps the guard outsid
     assert.equal(manifest.scope, '/imaginedeck/');
     assert.equal(manifest.display, 'fullscreen');
 
-    assert.ok(
-        sw.indexOf("importScripts('/sw-core-v45.js')") <
-        sw.indexOf("importScripts('/sw-imaginedeck-fullscreen-shell-v1.js')")
+    assert.match(sw, /importScripts\('\/sw-core-v44\.js'\)/);
+    assert.doesNotMatch(sw, /sw-core-v45|sw-imaginedeck-fullscreen-shell/);
+    assert.match(swCore, /const CORE_CACHE_VERSION = 'v44'/);
+    assert.match(
+        swCore,
+        /async function handleNavigationRequest\(request\)[\s\S]*?await cache\.put\(request, networkResponse\.clone\(\)\)/,
+        'test must model the active-v44 navigation write identified in review'
     );
-    assert.doesNotMatch(sw, /importScripts\('\/sw-core-v44\.js'\)/);
-    assert.match(fullscreenShell, /'\/imaginedeck\/fullscreen-guard-v2\.js'/);
-    assert.match(fullscreenShell, /self\.addEventListener\('install'/);
-    assert.match(fullscreenShell, /caches\.open\(CORE_CACHE_NAME\)/);
-    assert.match(fullscreenShell, /fetchCoreAssetWithTimeout\(request\)/);
-
-    assert.match(swCorePrevious, /const CORE_CACHE_VERSION = 'v44'/);
-    assert.match(swCore, /const CORE_CACHE_VERSION = 'v45'/);
-    const expectedCore = swCorePrevious.replace(
-        "const CORE_CACHE_VERSION = 'v44';",
-        "const CORE_CACHE_VERSION = 'v45';"
-    );
-    assert.equal(
-        normalizeCoreLayout(swCore),
-        normalizeCoreLayout(expectedCore),
-        'sw-core-v45.js must differ from v44 only by the fresh core cache generation, ignoring indentation and blank-line-only layout drift'
+    assert.match(
+        swCore,
+        /'\/imaginedeck\/fullscreen-guard\.js'/,
+        'legacy cached HTML must retain its existing guard asset during transition'
     );
 
     const atomicSet = swCore.match(/const ATOMIC_IMAGINEDECK_ASSET_PATHS = new Set\(\[([\s\S]*?)\]\);/);
     assert.ok(atomicSet, 'atomic asset set must remain explicit');
     assert.doesNotMatch(atomicSet[1], /fullscreen-guard|manifest\.json/);
+
+    assert.equal(fs.existsSync(removedVersionedGuardPath), false);
+    assert.equal(fs.existsSync(removedFullscreenShellPath), false);
+    assert.equal(fs.existsSync(removedCoreV45Path), false);
 });
