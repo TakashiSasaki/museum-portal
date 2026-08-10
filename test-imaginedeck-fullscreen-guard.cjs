@@ -5,14 +5,21 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const ROOT = process.env.IMAGINEDECK_TEST_ROOT || process.cwd();
-const guardPath = path.join(ROOT, 'public', 'imaginedeck', 'fullscreen-guard.js');
+const legacyGuardPath = path.join(ROOT, 'public', 'imaginedeck', 'fullscreen-guard.js');
 const indexPath = path.join(ROOT, 'public', 'imaginedeck', 'index.html');
 const manifestPath = path.join(ROOT, 'public', 'imaginedeck', 'manifest.json');
 const swPath = path.join(ROOT, 'public', 'sw.js');
 const swCorePath = path.join(ROOT, 'public', 'sw-core-v44.js');
-const swCorePreviousPath = path.join(ROOT, 'public', 'sw-core-v43.js');
+const removedVersionedGuardPath = path.join(ROOT, 'public', 'imaginedeck', 'fullscreen-guard-v2.js');
+const removedFullscreenShellPath = path.join(ROOT, 'public', 'sw-imaginedeck-fullscreen-shell-v1.js');
+const removedCoreV45Path = path.join(ROOT, 'public', 'sw-core-v45.js');
 
-const guardSource = fs.readFileSync(guardPath, 'utf8');
+const indexHtml = fs.readFileSync(indexPath, 'utf8');
+const inlineGuardMatch = indexHtml.match(
+    /<script data-imaginedeck-fullscreen-guard>\s*([\s\S]*?)\s*<\/script>/
+);
+assert.ok(inlineGuardMatch, 'index.html must contain the self-contained fullscreen guard');
+const guardSource = `${inlineGuardMatch[1].trim()}\n`;
 
 class FakeEventTarget {
     constructor() {
@@ -63,65 +70,19 @@ class FakeMediaQueryList extends FakeEventTarget {
     }
 }
 
-function createTimerHarness() {
-    let now = 0;
-    let nextId = 1;
-    const timers = new Map();
-
-    function setTimeoutFake(callback, delay = 0) {
-        const id = nextId++;
-        timers.set(id, { due: now + Number(delay || 0), callback });
-        return id;
-    }
-
-    function clearTimeoutFake(id) {
-        timers.delete(id);
-    }
-
-    function advance(ms) {
-        const target = now + ms;
-        while (true) {
-            let selectedId = null;
-            let selectedTimer = null;
-            for (const [id, timer] of timers) {
-                if (timer.due > target) continue;
-                if (!selectedTimer || timer.due < selectedTimer.due ||
-                    (timer.due === selectedTimer.due && id < selectedId)) {
-                    selectedId = id;
-                    selectedTimer = timer;
-                }
-            }
-            if (!selectedTimer) break;
-            now = selectedTimer.due;
-            timers.delete(selectedId);
-            selectedTimer.callback();
-        }
-        now = target;
-    }
-
-    return {
-        setTimeoutFake,
-        clearTimeoutFake,
-        advance,
-        pendingCount: () => timers.size
-    };
-}
-
 function createHarness({
     initialApiFullscreen = false,
     initialDisplayModeFullscreen = false,
-    requestBehaviors = []
+    requestBehaviors = [],
+    fullscreenApiAvailable = true
 } = {}) {
-    const timers = createTimerHarness();
     const overlay = new FakeElement('fullscreen-guard');
     const title = new FakeElement('fullscreen-guard-title');
     const message = new FakeElement('fullscreen-guard-message');
-    const counter = new FakeElement('fullscreen-guard-countdown');
     const elements = new Map([
         [overlay.id, overlay],
         [title.id, title],
-        [message.id, message],
-        [counter.id, counter]
+        [message.id, message]
     ]);
     const documentTarget = new FakeEventTarget();
     const windowTarget = new FakeEventTarget();
@@ -145,19 +106,21 @@ function createHarness({
         documentTarget.dispatch(type, event);
     }
 
-    documentElement.requestFullscreen = function requestFullscreen(options) {
-        requestCalls.push(options);
-        const behavior = behaviors.length > 0 ? behaviors.shift() : 'success';
-        if (behavior === 'reject') {
-            return Promise.reject(new Error('fullscreen request rejected'));
-        }
-        if (behavior === 'resolve-without-fullscreen') {
+    if (fullscreenApiAvailable) {
+        documentElement.requestFullscreen = function requestFullscreen(options) {
+            requestCalls.push(options);
+            const behavior = behaviors.length > 0 ? behaviors.shift() : 'success';
+            if (behavior === 'reject') {
+                return Promise.reject(new Error('fullscreen request rejected'));
+            }
+            if (behavior === 'resolve-without-fullscreen') {
+                return Promise.resolve();
+            }
+            document.fullscreenElement = documentElement;
+            dispatchDocument('fullscreenchange');
             return Promise.resolve();
-        }
-        document.fullscreenElement = documentElement;
-        dispatchDocument('fullscreenchange');
-        return Promise.resolve();
-    };
+        };
+    }
 
     const window = {
         matchMedia(query) {
@@ -175,8 +138,6 @@ function createHarness({
         },
         document,
         window,
-        setTimeout: timers.setTimeoutFake,
-        clearTimeout: timers.clearTimeoutFake,
         Promise,
         Object,
         Boolean,
@@ -185,19 +146,16 @@ function createHarness({
         Error
     });
 
-    vm.runInContext(guardSource, context, { filename: 'fullscreen-guard.js' });
+    vm.runInContext(guardSource, context, { filename: 'imaginedeck-inline-fullscreen-guard.js' });
 
     return {
         overlay,
         title,
         message,
-        counter,
         document,
         window,
         mediaQuery,
         requestCalls,
-        advance: timers.advance,
-        pendingTimerCount: timers.pendingCount,
         dispatchDocument,
         dispatchWindow(type, event) {
             windowTarget.dispatch(type, event);
@@ -219,17 +177,18 @@ function createHarness({
     };
 }
 
-test('non-fullscreen launch starts a single 10-second countdown and a tap enters fullscreen', async () => {
-    const harness = createHarness({ requestBehaviors: ['success'] });
+test('non-fullscreen launch immediately shows a tap-to-fullscreen prompt without requesting fullscreen', () => {
+    const harness = createHarness();
 
-    assert.equal(harness.state(), 'countdown');
+    assert.equal(harness.state(), 'tap-required');
     assert.equal(harness.overlay.hidden, false);
-    assert.equal(harness.counter.textContent, '10');
-    assert.equal(harness.pendingTimerCount(), 1);
+    assert.equal(harness.title.textContent, '全画面表示ではありません');
+    assert.equal(harness.message.textContent, '画面をタップすると全画面表示になります。');
+    assert.equal(harness.requestCalls.length, 0);
+});
 
-    harness.advance(1_000);
-    assert.equal(harness.counter.textContent, '9');
-    assert.equal(harness.pendingTimerCount(), 1);
+test('tap requests fullscreen and hides the prompt on success', async () => {
+    const harness = createHarness({ requestBehaviors: ['success'] });
 
     harness.click();
     await harness.flush();
@@ -238,7 +197,6 @@ test('non-fullscreen launch starts a single 10-second countdown and a tap enters
     assert.equal(harness.requestCalls[0].navigationUI, 'hide');
     assert.equal(harness.state(), 'fullscreen');
     assert.equal(harness.overlay.hidden, true);
-    assert.equal(harness.pendingTimerCount(), 0);
 });
 
 test('keyboard activation accepts standard and legacy Space key names', async () => {
@@ -251,30 +209,36 @@ test('keyboard activation accepts standard and legacy Space key names', async ()
         assert.equal(harness.state(), 'fullscreen');
         assert.equal(harness.overlay.hidden, true);
     }
+
+    const ignored = createHarness();
+    ignored.keyDown('Escape');
+    await ignored.flush();
+    assert.equal(ignored.requestCalls.length, 0);
+    assert.equal(ignored.state(), 'tap-required');
 });
 
-test('countdown makes a best-effort automatic request then falls back to one tap', async () => {
+test('failed fullscreen request returns to a retry tap prompt without automatic retry', async () => {
     const harness = createHarness({ requestBehaviors: ['reject', 'success'] });
 
-    harness.advance(10_000);
+    harness.click();
     await harness.flush();
 
     assert.equal(harness.requestCalls.length, 1);
     assert.equal(harness.state(), 'tap-required');
     assert.equal(harness.overlay.hidden, false);
-    assert.equal(harness.counter.textContent, 'タップ');
-    assert.match(harness.message.textContent, /画面を1回タップ/);
-    assert.equal(harness.pendingTimerCount(), 0);
+    assert.equal(harness.title.textContent, '全画面表示に切り替えられませんでした');
+    assert.equal(harness.message.textContent, '画面をもう一度タップしてください。');
+
+    harness.dispatchWindow('pageshow');
+    assert.equal(harness.requestCalls.length, 1, 'lifecycle events must not retry fullscreen automatically');
 
     harness.click();
     await harness.flush();
-
     assert.equal(harness.requestCalls.length, 2);
     assert.equal(harness.state(), 'fullscreen');
-    assert.equal(harness.overlay.hidden, true);
 });
 
-test('leaving fullscreen starts recovery countdown again', () => {
+test('leaving fullscreen immediately shows the tap prompt again', () => {
     const harness = createHarness({ initialApiFullscreen: true });
 
     assert.equal(harness.state(), 'fullscreen');
@@ -283,95 +247,112 @@ test('leaving fullscreen starts recovery countdown again', () => {
     harness.document.fullscreenElement = null;
     harness.dispatchDocument('fullscreenchange');
 
-    assert.equal(harness.state(), 'countdown');
-    assert.equal(harness.counter.textContent, '10');
-    assert.equal(harness.pendingTimerCount(), 1);
+    assert.equal(harness.state(), 'tap-required');
+    assert.equal(harness.overlay.hidden, false);
+    assert.equal(harness.message.textContent, '画面をタップすると全画面表示になります。');
+    assert.equal(harness.requestCalls.length, 0);
 });
 
-test('fullscreen PWA display mode suppresses recovery UI', () => {
+test('fullscreen PWA display mode suppresses the tap prompt', () => {
     const harness = createHarness({ initialDisplayModeFullscreen: true });
 
     assert.equal(harness.state(), 'fullscreen');
     assert.equal(harness.overlay.hidden, true);
-    assert.equal(harness.pendingTimerCount(), 0);
     assert.equal(harness.requestCalls.length, 0);
 });
 
-test('backgrounding cancels countdown and returning starts a fresh countdown', () => {
+test('display-mode changes reconcile between fullscreen and tap-required states', () => {
     const harness = createHarness();
 
-    harness.advance(3_000);
-    assert.equal(harness.counter.textContent, '7');
+    harness.mediaQuery.setMatches(true);
+    assert.equal(harness.state(), 'fullscreen');
+    assert.equal(harness.overlay.hidden, true);
+
+    harness.mediaQuery.setMatches(false);
+    assert.equal(harness.state(), 'tap-required');
+    assert.equal(harness.overlay.hidden, false);
+    assert.equal(harness.requestCalls.length, 0);
+});
+
+test('backgrounding hides the prompt and returning restores it without requesting fullscreen', () => {
+    const harness = createHarness();
 
     harness.document.visibilityState = 'hidden';
     harness.dispatchDocument('visibilitychange');
     assert.equal(harness.state(), 'suspended');
     assert.equal(harness.overlay.hidden, true);
-    assert.equal(harness.pendingTimerCount(), 0);
 
     harness.document.visibilityState = 'visible';
     harness.dispatchDocument('visibilitychange');
-    assert.equal(harness.state(), 'countdown');
-    assert.equal(harness.counter.textContent, '10');
-    assert.equal(harness.pendingTimerCount(), 1);
+    assert.equal(harness.state(), 'tap-required');
+    assert.equal(harness.overlay.hidden, false);
+    assert.equal(harness.requestCalls.length, 0);
 });
 
-test('repeated lifecycle events do not create duplicate countdown timers', () => {
-    const harness = createHarness();
+test('unsupported fullscreen API shows an unavailable message instead of a dead tap target', () => {
+    const harness = createHarness({ fullscreenApiAvailable: false });
 
-    harness.dispatchWindow('pageshow');
-    harness.dispatchWindow('pageshow');
-    harness.dispatchDocument('fullscreenchange');
-
-    assert.equal(harness.state(), 'countdown');
-    assert.equal(harness.pendingTimerCount(), 1);
+    assert.equal(harness.state(), 'unavailable');
+    assert.equal(harness.overlay.hidden, false);
+    assert.equal(harness.title.textContent, '全画面表示を開始できません');
+    assert.match(harness.message.textContent, /ブラウザ側の全画面表示/);
+    assert.equal(harness.requestCalls.length, 0);
 });
 
-test('shell wiring and manifest keep fullscreen assets outside the atomic ImagineDeck generation', () => {
-    if (!fs.existsSync(indexPath) || !fs.existsSync(manifestPath) ||
-        !fs.existsSync(swPath) || !fs.existsSync(swCorePath) ||
-        !fs.existsSync(swCorePreviousPath)) {
-        return;
-    }
+test('tap-only inline guard contains no countdown or timer-driven fullscreen path', () => {
+    assert.doesNotMatch(guardSource, /COUNTDOWN/);
+    assert.doesNotMatch(guardSource, /setTimeout|setInterval/);
+    assert.doesNotMatch(guardSource, /10秒|remainingSeconds|automatic/);
+});
 
-    const indexHtml = fs.readFileSync(indexPath, 'utf8');
+test('active v44 worker can cache the new shell without creating an external guard dependency', () => {
+    const normalizeNewlines = value => value.replace(/\r\n/g, '\n');
+    const legacyGuard = normalizeNewlines(fs.readFileSync(legacyGuardPath, 'utf8'));
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     const sw = fs.readFileSync(swPath, 'utf8');
     const swCore = fs.readFileSync(swCorePath, 'utf8');
-    const swCorePrevious = fs.readFileSync(swCorePreviousPath, 'utf8');
 
-    const normalizeNewlines = value => value.replace(/\r\n/g, '\n');
-    const expectedCore = normalizeNewlines(swCorePrevious)
-        .replace("const CORE_CACHE_VERSION = 'v43';", "const CORE_CACHE_VERSION = 'v44';")
-        .replaceAll(
-            "  '/imaginedeck/index.html',\n  '/imaginedeck/bootstrap-v45.js',",
-            "  '/imaginedeck/index.html',\n" +
-            "  '/imaginedeck/fullscreen-guard.js',\n" +
-            "  '/imaginedeck/manifest.json',\n" +
-            "  '/imaginedeck/bootstrap-v45.js',"
-        );
     assert.equal(
-        normalizeNewlines(swCore),
-        expectedCore,
-        'sw-core-v44.js must differ from v43 only by the cache version and fullscreen shell assets'
+        legacyGuard.trim(),
+        normalizeNewlines(guardSource).trim(),
+        'inline and legacy fullscreen guards must remain behaviorally identical'
     );
 
     assert.match(indexHtml, /rel="manifest" href="\.\/manifest\.json"/);
-    assert.ok(indexHtml.indexOf('./fullscreen-guard.js') < indexHtml.indexOf('./bootstrap-v45.js'));
-    const overlayTag = indexHtml.match(/<div\s+id="fullscreen-guard"[\s\S]*?>/);
-    assert.ok(overlayTag, 'fullscreen guard overlay must exist');
-    assert.doesNotMatch(overlayTag[0], /aria-live=/);
+    assert.match(indexHtml, /<script data-imaginedeck-fullscreen-guard>/);
+    assert.ok(
+        indexHtml.indexOf('<script data-imaginedeck-fullscreen-guard>') <
+        indexHtml.indexOf('./bootstrap-v45.js')
+    );
+    assert.doesNotMatch(indexHtml, /src="\.\/fullscreen-guard/);
+    assert.doesNotMatch(indexHtml, /fullscreen-guard-countdown/);
+    assert.doesNotMatch(indexHtml, /aria-live=/);
+    assert.match(indexHtml, /aria-labelledby="fullscreen-guard-title fullscreen-guard-message"/);
+
     assert.equal(manifest.id, '/imaginedeck/');
     assert.equal(manifest.start_url, '/imaginedeck/');
     assert.equal(manifest.scope, '/imaginedeck/');
     assert.equal(manifest.display, 'fullscreen');
 
     assert.match(sw, /importScripts\('\/sw-core-v44\.js'\)/);
+    assert.doesNotMatch(sw, /sw-core-v45|sw-imaginedeck-fullscreen-shell/);
     assert.match(swCore, /const CORE_CACHE_VERSION = 'v44'/);
-    assert.match(swCore, /'\/imaginedeck\/fullscreen-guard\.js'/);
-    assert.match(swCore, /'\/imaginedeck\/manifest\.json'/);
+    assert.match(
+        swCore,
+        /async function handleNavigationRequest\(request\)[\s\S]*?await cache\.put\(request, networkResponse\.clone\(\)\)/,
+        'test must model the active-v44 navigation write identified in review'
+    );
+    assert.match(
+        swCore,
+        /'\/imaginedeck\/fullscreen-guard\.js'/,
+        'legacy cached HTML must retain its existing guard asset during transition'
+    );
 
     const atomicSet = swCore.match(/const ATOMIC_IMAGINEDECK_ASSET_PATHS = new Set\(\[([\s\S]*?)\]\);/);
     assert.ok(atomicSet, 'atomic asset set must remain explicit');
     assert.doesNotMatch(atomicSet[1], /fullscreen-guard|manifest\.json/);
+
+    assert.equal(fs.existsSync(removedVersionedGuardPath), false);
+    assert.equal(fs.existsSync(removedFullscreenShellPath), false);
+    assert.equal(fs.existsSync(removedCoreV45Path), false);
 });

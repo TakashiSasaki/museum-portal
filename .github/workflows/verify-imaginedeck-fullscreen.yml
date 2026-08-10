@@ -7,7 +7,6 @@ on:
     paths:
       - 'public/imaginedeck/**'
       - 'public/sw.js'
-      - 'public/sw-core-v43.js'
       - 'public/sw-core-v44.js'
       - 'test-imaginedeck-fullscreen-guard.cjs'
       - '.github/workflows/verify-imaginedeck-fullscreen.yml'
@@ -31,9 +30,8 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check public/imaginedeck/fullscreen-guard.js
-          node --check public/sw-core-v44.js
           node --check public/sw.js
           node --check test-imaginedeck-fullscreen-guard.cjs
 
-      - name: Test fullscreen recovery state machine and shell wiring
+      - name: Test fullscreen recovery state machine and transition-safe shell wiring
         run: node --test test-imaginedeck-fullscreen-guard.cjs
