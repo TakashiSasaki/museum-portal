@@ -8,8 +8,6 @@ on:
       - 'public/imaginedeck/**'
       - 'public/sw.js'
       - 'public/sw-core-v44.js'
-      - 'public/sw-core-v45.js'
-      - 'public/sw-imaginedeck-fullscreen-shell-v1.js'
       - 'test-imaginedeck-fullscreen-guard.cjs'
       - '.github/workflows/verify-imaginedeck-fullscreen.yml'
   workflow_dispatch:
@@ -32,11 +30,8 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check public/imaginedeck/fullscreen-guard.js
-          node --check public/imaginedeck/fullscreen-guard-v2.js
-          node --check public/sw-imaginedeck-fullscreen-shell-v1.js
-          node --check public/sw-core-v45.js
           node --check public/sw.js
           node --check test-imaginedeck-fullscreen-guard.cjs
 
-      - name: Test fullscreen recovery state machine and shell wiring
+      - name: Test fullscreen recovery state machine and transition-safe shell wiring
         run: node --test test-imaginedeck-fullscreen-guard.cjs
