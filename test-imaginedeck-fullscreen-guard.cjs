@@ -11,8 +11,8 @@ const indexPath = path.join(ROOT, 'public', 'imaginedeck', 'index.html');
 const manifestPath = path.join(ROOT, 'public', 'imaginedeck', 'manifest.json');
 const swPath = path.join(ROOT, 'public', 'sw.js');
 const swFullscreenShellPath = path.join(ROOT, 'public', 'sw-imaginedeck-fullscreen-shell-v1.js');
-const swCorePath = path.join(ROOT, 'public', 'sw-core-v44.js');
-const swCorePreviousPath = path.join(ROOT, 'public', 'sw-core-v43.js');
+const swCorePath = path.join(ROOT, 'public', 'sw-core-v45.js');
+const swCorePreviousPath = path.join(ROOT, 'public', 'sw-core-v44.js');
 
 const guardSource = fs.readFileSync(guardPath, 'utf8');
 
@@ -300,7 +300,7 @@ test('tap-only guard contains no countdown or timer-driven fullscreen path', () 
     assert.doesNotMatch(guardSource, /10秒|remainingSeconds|automatic/);
 });
 
-test('shell wiring keeps the cache-busted guard outside the atomic ImagineDeck generation', () => {
+test('shell wiring uses a fresh core cache generation and keeps the guard outside the atomic ImagineDeck generation', () => {
     if (!fs.existsSync(legacyGuardPath) || !fs.existsSync(indexPath) ||
         !fs.existsSync(manifestPath) || !fs.existsSync(swPath) ||
         !fs.existsSync(swFullscreenShellPath) || !fs.existsSync(swCorePath) ||
@@ -335,27 +335,25 @@ test('shell wiring keeps the cache-busted guard outside the atomic ImagineDeck g
     assert.equal(manifest.display, 'fullscreen');
 
     assert.ok(
-        sw.indexOf("importScripts('/sw-core-v44.js')") <
+        sw.indexOf("importScripts('/sw-core-v45.js')") <
         sw.indexOf("importScripts('/sw-imaginedeck-fullscreen-shell-v1.js')")
     );
+    assert.doesNotMatch(sw, /importScripts\('\/sw-core-v44\.js'\)/);
     assert.match(fullscreenShell, /'\/imaginedeck\/fullscreen-guard-v2\.js'/);
     assert.match(fullscreenShell, /self\.addEventListener\('install'/);
     assert.match(fullscreenShell, /caches\.open\(CORE_CACHE_NAME\)/);
     assert.match(fullscreenShell, /fetchCoreAssetWithTimeout\(request\)/);
 
-    const expectedCore = swCorePrevious
-        .replace("const CORE_CACHE_VERSION = 'v43';", "const CORE_CACHE_VERSION = 'v44';")
-        .replaceAll(
-            "  '/imaginedeck/index.html',\n  '/imaginedeck/bootstrap-v45.js',",
-            "  '/imaginedeck/index.html',\n" +
-            "  '/imaginedeck/fullscreen-guard.js',\n" +
-            "  '/imaginedeck/manifest.json',\n" +
-            "  '/imaginedeck/bootstrap-v45.js',"
-        );
+    assert.match(swCorePrevious, /const CORE_CACHE_VERSION = 'v44'/);
+    assert.match(swCore, /const CORE_CACHE_VERSION = 'v45'/);
+    const expectedCore = swCorePrevious.replace(
+        "const CORE_CACHE_VERSION = 'v44';",
+        "const CORE_CACHE_VERSION = 'v45';"
+    );
     assert.equal(
         swCore,
         expectedCore,
-        'sw-core-v44.js must remain unchanged by the tap-only simplification'
+        'sw-core-v45.js must differ from v44 only by the fresh core cache generation'
     );
 
     const atomicSet = swCore.match(/const ATOMIC_IMAGINEDECK_ASSET_PATHS = new Set\(\[([\s\S]*?)\]\);/);
