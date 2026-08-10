@@ -70,14 +70,6 @@
             font-size: clamp(1rem, 2.5vmin, 1.5rem);
             line-height: 1.6;
         }
-        #fullscreen-guard-countdown {
-            display: block;
-            margin-top: 1rem;
-            font-size: clamp(3rem, 14vmin, 8rem);
-            font-weight: 800;
-            line-height: 1;
-            font-variant-numeric: tabular-nums;
-        }
     </style>
 </head>
 <body>
@@ -92,16 +84,15 @@
         id="fullscreen-guard"
         role="button"
         tabindex="0"
-        aria-label="全画面表示に戻る"
+        aria-labelledby="fullscreen-guard-title fullscreen-guard-message"
         hidden
     >
         <div id="fullscreen-guard-panel">
             <span id="fullscreen-guard-title"></span>
             <span id="fullscreen-guard-message"></span>
-            <span id="fullscreen-guard-countdown"></span>
         </div>
     </div>
-    <script src="./fullscreen-guard.js"></script>
+    <script src="./fullscreen-guard-v2.js"></script>
     <script src="./bootstrap-v45.js"></script>
 </body>
 </html>
