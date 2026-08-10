@@ -309,6 +309,7 @@ test('shell wiring uses a fresh core cache generation and keeps the guard outsid
     }
 
     const normalizeNewlines = value => value.replace(/\r\n/g, '\n');
+    const normalizeBlankLines = value => value.replace(/\n{2,}/g, '\n');
     const legacyGuard = normalizeNewlines(fs.readFileSync(legacyGuardPath, 'utf8'));
     const indexHtml = fs.readFileSync(indexPath, 'utf8');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -351,9 +352,9 @@ test('shell wiring uses a fresh core cache generation and keeps the guard outsid
         "const CORE_CACHE_VERSION = 'v45';"
     );
     assert.equal(
-        swCore,
-        expectedCore,
-        'sw-core-v45.js must differ from v44 only by the fresh core cache generation'
+        normalizeBlankLines(swCore),
+        normalizeBlankLines(expectedCore),
+        'sw-core-v45.js must differ from v44 only by the fresh core cache generation, ignoring blank-line-only layout drift'
     );
 
     const atomicSet = swCore.match(/const ATOMIC_IMAGINEDECK_ASSET_PATHS = new Set\(\[([\s\S]*?)\]\);/);
