@@ -1,13 +1,10 @@
 (() => {
     'use strict';
 
-    const FULLSCREEN_GUARD_VERSION = 1;
-    const COUNTDOWN_SECONDS = 10;
-    const COUNTDOWN_INTERVAL_MS = 1_000;
+    const FULLSCREEN_GUARD_VERSION = 2;
     const STATE = Object.freeze({
         BOOT: 'boot',
         FULLSCREEN: 'fullscreen',
-        COUNTDOWN: 'countdown',
         REQUESTING: 'requesting',
         TAP_REQUIRED: 'tap-required',
         UNAVAILABLE: 'unavailable',
@@ -17,9 +14,8 @@
     const overlay = document.getElementById('fullscreen-guard');
     const title = document.getElementById('fullscreen-guard-title');
     const message = document.getElementById('fullscreen-guard-message');
-    const counter = document.getElementById('fullscreen-guard-countdown');
 
-    if (!overlay || !title || !message || !counter) {
+    if (!overlay || !title || !message) {
         console.error('[ImagineDeck Fullscreen Guard] Required overlay elements are missing.');
         return;
     }
@@ -29,8 +25,6 @@
         : null;
 
     let state = STATE.BOOT;
-    let remainingSeconds = COUNTDOWN_SECONDS;
-    let countdownTimerId = null;
     let requestInFlight = false;
 
     function isDocumentVisible() {
@@ -45,11 +39,12 @@
         );
     }
 
-    function clearCountdownTimer() {
-        if (countdownTimerId !== null) {
-            clearTimeout(countdownTimerId);
-            countdownTimerId = null;
-        }
+    function hasFullscreenRequest() {
+        const target = document.documentElement;
+        return Boolean(
+            typeof target.requestFullscreen === 'function' ||
+            typeof target.webkitRequestFullscreen === 'function'
+        );
     }
 
     function setState(nextState) {
@@ -58,61 +53,52 @@
     }
 
     function enterFullscreenState(reason) {
-        clearCountdownTimer();
-        remainingSeconds = COUNTDOWN_SECONDS;
         overlay.hidden = true;
         setState(STATE.FULLSCREEN);
         console.info('[ImagineDeck Fullscreen Guard] Fullscreen state confirmed.', { reason });
     }
 
-    function renderCountdown() {
-        overlay.hidden = false;
-        title.textContent = '全画面表示が解除されています';
-        message.textContent = '10秒後に全画面表示へ戻ります。画面をタップするとすぐに戻ります。';
-        counter.textContent = String(remainingSeconds);
-    }
-
-    function showTapRequired(messageText) {
-        clearCountdownTimer();
-        if (isEffectiveFullscreen()) {
-            enterFullscreenState('fullscreen became active before tap prompt');
-            return;
-        }
-        setState(STATE.TAP_REQUIRED);
-        overlay.hidden = false;
-        title.textContent = '全画面表示に戻ります';
-        message.textContent = messageText || '画面を1回タップしてください。';
-        counter.textContent = 'タップ';
-    }
-
     function showUnavailable() {
-        clearCountdownTimer();
         setState(STATE.UNAVAILABLE);
         overlay.hidden = false;
         title.textContent = '全画面表示を開始できません';
         message.textContent = 'このブラウザではページから全画面表示を開始できません。ブラウザ側の全画面表示を使用してください。';
-        counter.textContent = '！';
     }
 
-    function renderRequesting(trigger) {
+    function showTapRequired({ retry = false } = {}) {
+        if (isEffectiveFullscreen()) {
+            enterFullscreenState('fullscreen became active before tap prompt');
+            return;
+        }
+        if (!hasFullscreenRequest()) {
+            showUnavailable();
+            return;
+        }
+
+        setState(STATE.TAP_REQUIRED);
+        overlay.hidden = false;
+        title.textContent = retry
+            ? '全画面表示に切り替えられませんでした'
+            : '全画面表示ではありません';
+        message.textContent = retry
+            ? '画面をもう一度タップしてください。'
+            : '画面をタップすると全画面表示になります。';
+    }
+
+    function renderRequesting() {
         setState(STATE.REQUESTING);
         overlay.hidden = false;
         title.textContent = '全画面表示に切り替えています';
-        message.textContent = trigger === 'automatic'
-            ? '自動的に全画面表示へ戻しています。'
-            : '全画面表示へ戻しています。';
-        counter.textContent = '…';
+        message.textContent = 'そのままお待ちください。';
     }
 
-    async function requestFullscreen(trigger) {
+    async function requestFullscreen() {
         if (requestInFlight || isEffectiveFullscreen()) {
             if (isEffectiveFullscreen()) {
                 enterFullscreenState('fullscreen already active before request');
             }
             return;
         }
-
-        clearCountdownTimer();
 
         const target = document.documentElement;
         const standardRequest = target.requestFullscreen;
@@ -123,7 +109,7 @@
         }
 
         requestInFlight = true;
-        renderRequesting(trigger);
+        renderRequesting();
 
         try {
             if (typeof standardRequest === 'function') {
@@ -133,79 +119,22 @@
             }
 
             if (isEffectiveFullscreen()) {
-                enterFullscreenState(`${trigger} fullscreen request succeeded`);
+                enterFullscreenState('user fullscreen request succeeded');
             } else {
-                showTapRequired('全画面表示への切り替えを確認できませんでした。画面をもう一度タップしてください。');
+                showTapRequired({ retry: true });
             }
         } catch (error) {
-            console.warn('[ImagineDeck Fullscreen Guard] Fullscreen request failed.', {
-                trigger,
-                error
-            });
-            showTapRequired(
-                trigger === 'automatic'
-                    ? '自動的に全画面表示へ戻せませんでした。画面を1回タップしてください。'
-                    : '全画面表示へ切り替えられませんでした。画面をもう一度タップしてください。'
-            );
+            console.warn('[ImagineDeck Fullscreen Guard] Fullscreen request failed.', { error });
+            showTapRequired({ retry: true });
         } finally {
             requestInFlight = false;
             if (isEffectiveFullscreen()) {
-                enterFullscreenState(`${trigger} fullscreen request completed`);
+                enterFullscreenState('user fullscreen request completed');
             }
         }
-    }
-
-    function scheduleCountdownTick() {
-        clearCountdownTimer();
-        countdownTimerId = setTimeout(() => {
-            countdownTimerId = null;
-
-            if (state !== STATE.COUNTDOWN || !isDocumentVisible()) {
-                return;
-            }
-            if (isEffectiveFullscreen()) {
-                enterFullscreenState('fullscreen became active during countdown');
-                return;
-            }
-
-            remainingSeconds -= 1;
-            if (remainingSeconds <= 0) {
-                remainingSeconds = 0;
-                renderCountdown();
-                void requestFullscreen('automatic');
-                return;
-            }
-
-            renderCountdown();
-            scheduleCountdownTick();
-        }, COUNTDOWN_INTERVAL_MS);
-    }
-
-    function startCountdown(reason) {
-        if (!isDocumentVisible() || isEffectiveFullscreen()) {
-            if (isEffectiveFullscreen()) {
-                enterFullscreenState(`${reason}: fullscreen already active`);
-            }
-            return;
-        }
-        if (
-            state === STATE.COUNTDOWN ||
-            state === STATE.REQUESTING ||
-            state === STATE.TAP_REQUIRED ||
-            state === STATE.UNAVAILABLE
-        ) {
-            return;
-        }
-
-        remainingSeconds = COUNTDOWN_SECONDS;
-        setState(STATE.COUNTDOWN);
-        renderCountdown();
-        scheduleCountdownTick();
-        console.info('[ImagineDeck Fullscreen Guard] Fullscreen recovery countdown started.', { reason });
     }
 
     function suspend() {
-        clearCountdownTimer();
         overlay.hidden = true;
         setState(STATE.SUSPENDED);
     }
@@ -222,7 +151,7 @@
         if (state === STATE.REQUESTING) {
             return;
         }
-        startCountdown(reason);
+        showTapRequired();
     }
 
     function handleUserActivation(event) {
@@ -239,35 +168,27 @@
             return;
         }
         event?.preventDefault?.();
-        void requestFullscreen('user');
+        void requestFullscreen();
     }
 
     overlay.addEventListener('click', handleUserActivation);
     overlay.addEventListener('keydown', handleUserActivation);
 
     document.addEventListener('fullscreenchange', () => {
-        if (isEffectiveFullscreen()) {
-            enterFullscreenState('fullscreenchange');
-            return;
-        }
         setState(STATE.BOOT);
-        reconcile('fullscreen exited');
+        reconcile(isEffectiveFullscreen() ? 'fullscreenchange' : 'fullscreen exited');
     });
 
     document.addEventListener('fullscreenerror', () => {
         if (!requestInFlight && !isEffectiveFullscreen()) {
-            showTapRequired('全画面表示へ切り替えられませんでした。画面をもう一度タップしてください。');
+            showTapRequired({ retry: true });
         }
     });
 
     if ('onwebkitfullscreenchange' in document) {
         document.addEventListener('webkitfullscreenchange', () => {
-            if (isEffectiveFullscreen()) {
-                enterFullscreenState('webkitfullscreenchange');
-                return;
-            }
             setState(STATE.BOOT);
-            reconcile('webkit fullscreen exited');
+            reconcile(isEffectiveFullscreen() ? 'webkitfullscreenchange' : 'webkit fullscreen exited');
         });
     }
 
@@ -290,12 +211,12 @@
 
     if (fullscreenDisplayMode) {
         const handleDisplayModeChange = () => {
-            if (isEffectiveFullscreen()) {
-                enterFullscreenState('display-mode fullscreen');
-                return;
-            }
             setState(STATE.BOOT);
-            reconcile('display-mode left fullscreen');
+            reconcile(
+                isEffectiveFullscreen()
+                    ? 'display-mode fullscreen'
+                    : 'display-mode left fullscreen'
+            );
         };
         if (typeof fullscreenDisplayMode.addEventListener === 'function') {
             fullscreenDisplayMode.addEventListener('change', handleDisplayModeChange);
