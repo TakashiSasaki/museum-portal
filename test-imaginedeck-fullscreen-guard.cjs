@@ -205,6 +205,9 @@ function createHarness({
         click() {
             overlay.dispatch('click');
         },
+        keyDown(key) {
+            overlay.dispatch('keydown', { key });
+        },
         async flush() {
             await Promise.resolve();
             await Promise.resolve();
@@ -236,6 +239,18 @@ test('non-fullscreen launch starts a single 10-second countdown and a tap enters
     assert.equal(harness.state(), 'fullscreen');
     assert.equal(harness.overlay.hidden, true);
     assert.equal(harness.pendingTimerCount(), 0);
+});
+
+test('keyboard activation accepts standard and legacy Space key names', async () => {
+    for (const key of ['Enter', ' ', 'Space', 'Spacebar']) {
+        const harness = createHarness({ requestBehaviors: ['success'] });
+        harness.keyDown(key);
+        await harness.flush();
+
+        assert.equal(harness.requestCalls.length, 1, `key ${JSON.stringify(key)} should activate`);
+        assert.equal(harness.state(), 'fullscreen');
+        assert.equal(harness.overlay.hidden, true);
+    }
 });
 
 test('countdown makes a best-effort automatic request then falls back to one tap', async () => {
@@ -314,7 +329,8 @@ test('repeated lifecycle events do not create duplicate countdown timers', () =>
 
 test('shell wiring and manifest keep fullscreen assets outside the atomic ImagineDeck generation', () => {
     if (!fs.existsSync(indexPath) || !fs.existsSync(manifestPath) ||
-        !fs.existsSync(swPath) || !fs.existsSync(swCorePath)) {
+        !fs.existsSync(swPath) || !fs.existsSync(swCorePath) ||
+        !fs.existsSync(swCorePreviousPath)) {
         return;
     }
 
@@ -342,6 +358,9 @@ test('shell wiring and manifest keep fullscreen assets outside the atomic Imagin
 
     assert.match(indexHtml, /rel="manifest" href="\.\/manifest\.json"/);
     assert.ok(indexHtml.indexOf('./fullscreen-guard.js') < indexHtml.indexOf('./bootstrap-v45.js'));
+    const overlayTag = indexHtml.match(/<div\s+id="fullscreen-guard"[\s\S]*?>/);
+    assert.ok(overlayTag, 'fullscreen guard overlay must exist');
+    assert.doesNotMatch(overlayTag[0], /aria-live=/);
     assert.equal(manifest.id, '/imaginedeck/');
     assert.equal(manifest.start_url, '/imaginedeck/');
     assert.equal(manifest.scope, '/imaginedeck/');
