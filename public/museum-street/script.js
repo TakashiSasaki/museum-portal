@@ -123,41 +123,27 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     };
 
-    const loadEventsContent = (page) => {
-        const url = `events/${String(page).padStart(2, '0')}-events.html`;
+    const API_URL = 'https://script.google.com/macros/s/AKfycbyhraKi6oqu33iU1VNa9cSP4Oi9K7Kb7g3GrEOSjAUiqK7oELrhuCaAK2ElN4tneWUA/exec';
 
-        fetch(url)
+    const loadEventsContent = (page) => {
+        const apiUrl = `${API_URL}?page=${page}&mime=text/plain`;
+        const fallbackUrl = `events/${String(page).padStart(2, '0')}-events.html`;
+
+        contentFrame.srcdoc = `<div style="color: #94a3b8; display: flex; justify-content: center; align-items: center; height: 100%; font-family: sans-serif;">読み込み中...</div>`;
+
+        fetch(apiUrl)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`API error! status: ${response.status}`);
                 }
                 return response.text();
             })
             .then(html => {
-                const styledHtml = `
-                    <style>
-                        body {
-                            color: #e2e8f0; 
-                            background-color: transparent;
-                            font-family: 'Noto Sans JP', sans-serif;
-                            padding: 0; 
-                            line-height: 1.8;
-                        }
-                        a { color: #60a5fa; text-decoration: underline; }
-                        h1,h2,h3,h4,h5,h6 { border-color: rgba(255,255,255,0.2); margin-top: 1.5em; margin-bottom: 0.75em; font-weight: 600; }
-                        h1 { font-size: 1.875rem; } 
-                        h2 { font-size: 1.5rem; } 
-                        h3 { font-size: 1.25rem; } 
-                        ul, ol { list-style-position: inside; } 
-                        hr { border-color: rgba(255,255,255,0.15); margin-top: 2rem; margin-bottom: 2rem; }
-                    </style>
-                    ${html}
-                `;
-                contentFrame.srcdoc = styledHtml;
+                contentFrame.srcdoc = html;
             })
             .catch(error => {
-                console.warn('Fetch failed, likely offline.', error);
-                contentFrame.src = url;
+                console.warn('Direct API fetch failed, falling back to local wrapper.', error);
+                contentFrame.src = fallbackUrl;
             });
     };
 
@@ -233,6 +219,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    const precacheAllEvents = async (excludePage) => {
+        const pages = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'].filter(p => p !== String(excludePage));
+        for (const p of pages) {
+            const apiUrl = `${API_URL}?page=${p}&mime=text/plain`;
+            try {
+                await fetch(apiUrl);
+            } catch (e) {
+                console.warn(`[Museum Street] Precache failed for page ${p}`, e);
+            }
+            await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        console.log('[Museum Street] Pre-caching of all museum events completed.');
+    };
+
     const initialLink = navContainer.querySelector(`[data-page="${defaultPage}"]`);
     if (initialLink) {
         initialLink.classList.add('active');
@@ -248,6 +248,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadEventsContent(defaultPage);
                 if (currentTab === 'map') {
                     loadMapContent(defaultPage);
+                }
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(() => precacheAllEvents(defaultPage));
+                } else {
+                    setTimeout(() => precacheAllEvents(defaultPage), 1000);
                 }
             }
         })();
