@@ -1,10 +1,22 @@
 {
   "name": "museum-portal",
-  "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node --test test-static-integrity.cjs",
+    "lint": "eslint server.js",
+    "test:static": "node --test test-static-integrity.cjs",
+    "test:imaginedeck": "node --test test-imaginedeck-fullscreen-guard.cjs",
+    "test:server": "node --test test-server.cjs",
+    "test:browser": "node test-browser-smoke.cjs",
+    "test:bookmarks": "node test-bookmarks.cjs",
+    "test:archives": "node test-archives.cjs",
+    "test:highlights": "node test-highlights.cjs",
+    "test": "node --test test-static-integrity.cjs test-imaginedeck-fullscreen-guard.cjs test-server.cjs"
+  },
   "devDependencies": {
-    "@types/bun": "latest",
     "firebase": "^12.11.0",
     "firebase-admin": "^13.7.0",
     "playwright": "^1.60.0"
@@ -15,6 +27,7 @@
   "dependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.1.0",
+    "express": "^5.2.1",
     "firebase-tools": "^15.12.0",
     "globals": "^17.4.0"
   }

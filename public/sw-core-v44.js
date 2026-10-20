@@ -177,6 +177,21 @@ try {
   }));
 }
 
+async function refreshLocalCoreAssets() {
+  const cache = await caches.open(CORE_CACHE_NAME);
+  await Promise.all(CORE_INSTALL_ASSETS.map(async (assetUrl) => {
+    try {
+      const request = new Request(assetUrl);
+      const response = await fetchCoreAssetWithTimeout(request);
+      if (response && (response.status === 200 || response.type === 'opaque')) {
+        await cache.put(assetUrl, response);
+      }
+    } catch (err) {
+      console.warn(`[ServiceWorker] Core asset refresh skipped for ${assetUrl}:`, err);
+    }
+  }));
+}
+
 self.addEventListener('install', (evt) => {
   console.log('[ServiceWorker] Install event started.');
   evt.waitUntil(
@@ -241,9 +256,14 @@ self.addEventListener('activate', (evt) => {
       .then(() => {
         console.log('[ServiceWorker] Activation complete. Starting API pre-caching in background.');
         precacheApiContent();
-        return precacheRemoteCoreAssets().catch((error) => {
-          console.warn('[ServiceWorker] Remote core asset background precache failed.', error);
-        }).then(() => self.clients.claim());
+        return Promise.all([
+          precacheRemoteCoreAssets().catch((error) => {
+            console.warn('[ServiceWorker] Remote core asset background precache failed.', error);
+          }),
+          refreshLocalCoreAssets().catch((error) => {
+            console.warn('[ServiceWorker] Local core asset background refresh failed.', error);
+          })
+        ]).then(() => self.clients.claim());
       })
   );
 });
@@ -930,12 +950,28 @@ async function handleApiRequest(request) {
   }
 }
 
+const NAVIGATION_NETWORK_TIMEOUT_MS = 5 * 1000;
+
+async function fetchNavigationWithTimeout(request) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error(`Navigation request timed out after ${NAVIGATION_NETWORK_TIMEOUT_MS}ms`));
+  }, NAVIGATION_NETWORK_TIMEOUT_MS);
+  try {
+    return await fetch(request, { cache: 'no-cache', signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function handleNavigationRequest(request) {
   try {
-    const networkResponse = await fetch(request, { cache: 'no-cache' });
+    const networkResponse = await fetchNavigationWithTimeout(request);
 
-    const cache = await caches.open(CORE_CACHE_NAME);
-    await cache.put(request, networkResponse.clone());
+    if (networkResponse && networkResponse.status === 200) {
+      const cache = await caches.open(CORE_CACHE_NAME);
+      await cache.put(request, networkResponse.clone());
+    }
 
     return networkResponse;
   } catch (error) {
@@ -944,38 +980,38 @@ async function handleNavigationRequest(request) {
     if (cachedResponse) {
       return cachedResponse;
     }
+    try {
+      const reqUrl = new URL(request.url);
+      if (reqUrl.pathname === '/bookmarks' || reqUrl.pathname === '/bookmarks/') {
+        const appShell = (await caches.match('/index.html')) || (await caches.match('/'));
+        if (appShell) {
+          return appShell;
+        }
+      }
+    } catch (e) {
+      // Ignore URL parse error
+    }
     return caches.match('/offline.html');
   }
 }
 
 async function handleStaticAssetRequest(request, evt) {
-  const cachedResponse = await caches.match(request, { ignoreSearch: true });
-
-  const networkFetchPromise = (async () => {
-    try {
-      const networkResponse = await fetch(request);
-      if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
-        const cache = await caches.open(CORE_CACHE_NAME);
-        await cache.put(request, networkResponse.clone());
-      }
-      return networkResponse;
-    } catch (e) {
-      console.log(`[SW] Network failed for ${request.url}.`, e);
-      if (!cachedResponse) {
-        return new Response(`Offline: Failed to fetch ${request.url}`, { status: 503 });
-      }
-      throw e;
+  // Network-First strategy for static assets (AGENTS.md rule 5: Network First)
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+      const cache = await caches.open(CORE_CACHE_NAME);
+      await cache.put(request, networkResponse.clone());
     }
-  })();
-
-  if (cachedResponse) {
-    if (evt && evt.waitUntil) {
-      evt.waitUntil(networkFetchPromise.catch(() => {}));
+    return networkResponse;
+  } catch (e) {
+    console.log(`[SW] Network failed for static asset ${request.url}. Falling back to cache.`, e);
+    const cachedResponse = await caches.match(request, { ignoreSearch: true });
+    if (cachedResponse) {
+      return cachedResponse;
     }
-    return cachedResponse;
+    return new Response(`Offline: Failed to fetch ${request.url}`, { status: 503 });
   }
-
-  return networkFetchPromise;
 }
 
 // 4. Utility Functions

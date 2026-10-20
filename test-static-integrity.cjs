@@ -50,7 +50,10 @@ test('Relevant JavaScript and Service Worker scripts have valid syntax', () => {
         'test-imaginedeck-fullscreen-guard.cjs',
         'test-static-integrity.cjs',
         'test-browser-smoke.cjs',
-        'test-sw.cjs'
+        'test-server.cjs',
+        'test-sw.cjs',
+        'test-bookmarks.cjs',
+        'test-archives.cjs'
     ].map(f => path.join(ROOT, f)).filter(f => fs.existsSync(f));
 
     const filesToCheck = [...publicJsFiles, ...rootTestScripts];
@@ -97,6 +100,46 @@ test('public/index.html top-page structural and responsive contract', () => {
     assert.ok(html.includes('<header'), 'index.html must contain header');
     assert.ok(html.includes('<footer'), 'index.html must contain footer');
     assert.ok(html.includes('id="portal-grid"'), 'index.html must contain #portal-grid');
+    assert.ok(
+        html.includes('https://www.ehime-u.ac.jp/contact-list/'),
+        'index.html footer must contain link to Ehime University contact list'
+    );
+    assert.ok(
+        html.includes('id="footer-contact-link"'),
+        'index.html footer must contain id="footer-contact-link"'
+    );
+    assert.ok(
+        html.includes('id="admin-trigger-button"'),
+        'index.html must contain #admin-trigger-button for bottom-right tool pictogram'
+    );
+    assert.ok(
+        html.includes('id="cache-reload-button"'),
+        'index.html must contain #cache-reload-button for bottom-left reload pictogram'
+    );
+    assert.ok(
+        !html.includes('title="管理者ツール'),
+        'admin-trigger-button must not have a title balloon attribute'
+    );
+    assert.ok(
+        html.includes('id="header-highlights-button"'),
+        'index.html header must contain #header-highlights-button'
+    );
+    assert.ok(
+        html.includes('id="header-bookmarks-button"'),
+        'index.html header must contain #header-bookmarks-button'
+    );
+    assert.ok(
+        html.includes('id="header-archives-button"'),
+        'index.html header must contain #header-archives-button'
+    );
+    assert.ok(
+        html.includes('Highlights') && html.includes('Bookmarks') && html.includes('Archives'),
+        'index.html header must contain Highlights, Bookmarks and Archives labels'
+    );
+    assert.ok(
+        html.includes('id="highlights-view"'),
+        'index.html must contain #highlights-view'
+    );
 
     // Grid responsive classes contract
     assert.ok(html.includes('grid-cols-2'), 'portal grid must specify grid-cols-2 for portrait');
@@ -119,6 +162,10 @@ test('public/index.css layout and circular icon contracts', () => {
         css.includes('flex-shrink: 0'),
         'index.css must enforce flex-shrink: 0 on plasma-sphere icons'
     );
+    assert.ok(
+        css.includes('#header-bookmarks-button > svg') && css.includes('drop-shadow'),
+        'index.css must include glow effect drop-shadow for header action button pictograms'
+    );
 
     // Responsive grid row contract
     assert.ok(
@@ -128,6 +175,16 @@ test('public/index.css layout and circular icon contracts', () => {
     assert.ok(
         css.includes('grid-template-rows: repeat(2, 1fr)'),
         'index.css landscape query must define repeat(2, 1fr)'
+    );
+
+    // Admin trigger button styling contract
+    assert.ok(
+        css.includes('.admin-trigger-button'),
+        'index.css must define .admin-trigger-button styles'
+    );
+    assert.ok(
+        css.includes('.cache-reload-button'),
+        'index.css must define .cache-reload-button styles'
     );
 });
 

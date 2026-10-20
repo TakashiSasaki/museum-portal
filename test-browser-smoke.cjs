@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.TEST_PORT || (process.env.PORT === '8080' ? 3000 : (process.env.PORT || 3000));
 const BASE_URL = process.env.BASE_URL || `http://127.0.0.1:${PORT}/`;
 const ARTIFACT_DIR = process.env.ARTIFACT_DIR || path.join(process.cwd(), 'diagnostic-screenshots');
 
@@ -19,7 +19,10 @@ async function runBrowserSmoke() {
     let browser;
     try {
         browser = await chromium.launch({
-            timeout: 15000
+            timeout: 15000,
+            ...(process.env.PLAYWRIGHT_CHROMIUM_CHANNEL
+                ? { channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL }
+                : {})
         });
     } catch (err) {
         console.error('Failed to launch Chromium browser:', err);
@@ -63,6 +66,22 @@ async function runBrowserSmoke() {
         const footer = await page.$('footer');
         assert.ok(footer, 'footer must be present');
         assert.ok(await footer.isVisible(), 'footer must be visible');
+
+        const contactLink = await page.$('#footer-contact-link');
+        assert.ok(contactLink, '#footer-contact-link must be present in footer');
+        assert.ok(await contactLink.isVisible(), '#footer-contact-link must be visible');
+
+        const adminBtn = await page.$('#admin-trigger-button');
+        assert.ok(adminBtn, '#admin-trigger-button must be present');
+        assert.ok(await adminBtn.isVisible(), '#admin-trigger-button must be visible in portrait');
+
+        const bookmarksBtn = await page.$('#header-bookmarks-button');
+        assert.ok(bookmarksBtn, '#header-bookmarks-button must be present');
+        assert.ok(await bookmarksBtn.isVisible(), '#header-bookmarks-button must be visible in portrait');
+
+        const archivesBtn = await page.$('#header-archives-button');
+        assert.ok(archivesBtn, '#header-archives-button must be present');
+        assert.ok(await archivesBtn.isVisible(), '#header-archives-button must be visible in portrait');
 
         // Check 8 portal cards
         logStep('portrait', 'checking card geometry');
@@ -156,6 +175,10 @@ async function runBrowserSmoke() {
         assert.ok(header && await header.isVisible(), 'header must be visible');
         const footer = await page.$('footer');
         assert.ok(footer && await footer.isVisible(), 'footer must be visible');
+        const contactLink = await page.$('#footer-contact-link');
+        assert.ok(contactLink && await contactLink.isVisible(), '#footer-contact-link must be visible in landscape');
+        const adminBtn = await page.$('#admin-trigger-button');
+        assert.ok(adminBtn && await adminBtn.isVisible(), '#admin-trigger-button must be visible in landscape');
 
         // Verify slogan hidden in landscape
         const slogan = await page.$('.slogan-text');
@@ -257,6 +280,48 @@ async function runBrowserSmoke() {
         logStep('pwa-sw', 'PASS');
     } catch (err) {
         logStep('pwa-sw', `FAIL: ${err.message}`);
+        failureCount++;
+    }
+
+    // --- PHASE 4: Admin Trigger Long-Press Verification ---
+    try {
+        logStep('admin-trigger', 'starting 2-second long-press verification');
+        const context = await browser.newContext({ viewport: { width: 400, height: 800 } });
+        const page = await context.newPage();
+        await page.goto(BASE_URL, { waitUntil: 'load', timeout: 10000 });
+
+        const adminBtn = await page.waitForSelector('#admin-trigger-button', { state: 'visible' });
+        assert.ok(adminBtn, 'Admin trigger button must be present');
+
+        // Test short press: release after 300ms -> should NOT navigate
+        const box = await adminBtn.boundingBox();
+        assert.ok(box, 'Admin trigger button must have a bounding box');
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+
+        await page.mouse.move(cx, cy);
+        await page.mouse.down();
+        await page.waitForTimeout(300);
+        await page.mouse.up();
+        await page.waitForTimeout(2200);
+
+        let currentUrl = page.url();
+        assert.ok(!currentUrl.includes('/admin/'), `Short press should not navigate to /admin/, current: ${currentUrl}`);
+
+        // Test long press: hold for 2200ms -> should navigate to /admin/
+        await page.mouse.move(cx, cy);
+        await page.mouse.down();
+        await page.waitForTimeout(2200);
+        await page.mouse.up();
+
+        await page.waitForURL(url => url.pathname.includes('/admin'), { timeout: 5000 });
+        currentUrl = page.url();
+        assert.ok(currentUrl.includes('/admin'), `Long press must navigate to /admin/, got: ${currentUrl}`);
+
+        await context.close();
+        logStep('admin-trigger', 'PASS');
+    } catch (err) {
+        logStep('admin-trigger', `FAIL: ${err.message}`);
         failureCount++;
     }
 

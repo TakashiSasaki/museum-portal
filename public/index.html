@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
     <link rel="canonical" href="https://portal.museum.ehime-u.ac.jp/" />
+    <link rel="alternate" href="https://ehimeuniv.ai.studio/" />
     <link rel="manifest" href="manifest.json">
 
     <script src="/resume-guard.js"></script>
@@ -34,7 +35,7 @@
     <meta name="twitter:description" content="果てしなき知の探求、その入り口。愛媛大学ミュージアムでの企画展、愛媛松山ミュージアムストリートのイベント情報も発信中。">
     <meta name="twitter:image" content="https://portal.museum.ehime-u.ac.jp/portal-thumbnail.png">
 
-    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="index.css?v=20260917_10">
 
     <!-- Firebase SDK -->
     <script src="/__/firebase/8.10.1/firebase-app.js"></script>
@@ -84,76 +85,367 @@
         </div>
 
         <!-- 2. ミュージアム・ポータル (日本語メインタイトル) -->
-        <h1 class="text-lg sm:text-3xl font-bold tracking-normal sm:tracking-[0.2em] whitespace-nowrap text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
+        <h1 id="header-main-title" class="text-lg sm:text-3xl font-bold tracking-normal sm:tracking-[0.2em] whitespace-nowrap text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
             ミュージアム・ポータル
         </h1>
+
+        <!-- 2b. サブビュー表示時の「ポータルへ戻る」ボタン (header-main-title位置に代替表示) -->
+        <button
+            type="button"
+            id="header-back-button"
+            class="hidden inline-flex items-center gap-1.5 sm:gap-2 px-4 py-1.5 sm:py-2 rounded-full bg-slate-900/80 hover:bg-slate-800/90 border border-cyan-500/50 hover:border-cyan-400 text-xs sm:text-sm font-medium text-cyan-200 hover:text-white transition-all cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.25)] group"
+            aria-label="ポータルへ戻る"
+            title="ポータルへ戻る"
+        >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 group-hover:text-cyan-200 transition-colors">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>ポータルへ戻る</span>
+        </button>
 
         <!-- 3. 果てしなき知の探求、その入り口。 (スローガン・シアン) -->
         <p class="text-[10px] sm:text-[14px] mt-1 sm:mt-4 font-light text-cyan-300 tracking-normal sm:tracking-[0.15em] drop-shadow-[0_0_8px_rgba(103,232,249,0.3)] opacity-95 whitespace-nowrap slogan-text">
             果てしなき知の探求、その入り口。
         </p>
+
+        <!-- 4. クイックアクションボタン (Highlights / Bookmarks / Archives) -->
+        <div id="header-quick-actions" class="header-quick-actions flex items-center justify-center gap-1.5 sm:gap-3 mt-1.5 sm:mt-2.5">
+            <button
+                type="button"
+                id="header-highlights-button"
+                class="header-action-button group"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-cyan-300 group-hover:text-white transition-colors">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+                <span>Highlights</span>
+                <span id="header-highlights-badge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-cyan-500/30 text-[10px] text-cyan-200 font-mono">0</span>
+            </button>
+            <button
+                type="button"
+                id="header-bookmarks-button"
+                class="header-action-button group"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-cyan-300 group-hover:text-white transition-colors">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>Bookmarks</span>
+                <span id="header-bookmarks-badge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-cyan-500/30 text-[10px] text-cyan-200 font-mono">0</span>
+            </button>
+            <button
+                type="button"
+                id="header-archives-button"
+                class="header-action-button group"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-cyan-300 group-hover:text-white transition-colors">
+                    <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                    <rect x="1" y="3" width="22" height="5"></rect>
+                    <line x1="10" y1="12" x2="14" y2="12"></line>
+                </svg>
+                <span>Archives</span>
+                <span id="header-archives-badge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-cyan-500/30 text-[10px] text-cyan-200 font-mono">0</span>
+            </button>
+        </div>
     </header>
 
     <!-- Main Grid (Portrait: 2x4, Landscape: 4x2) -->
     <main class="w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl px-4 grid grid-cols-2 landscape:grid-cols-4 sm:grid-cols-4 gap-3 relative z-10 flex-1 min-h-0" id="portal-grid">
         
         <!-- Slot 1 -->
-        <a href="#" data-slot="1" class="invisible cosmic-card p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+        <a href="#" data-slot="1" data-card-id="card1" aria-busy="true" class="cosmic-card is-loading p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+            <button type="button" class="card-bookmark-btn" data-bookmark-slot="1" data-card-id="card1" aria-label="スロット1をブックマーク" title="ブックマーク">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="w-3.5 h-3.5 sm:w-4 sm:h-4 bookmark-icon">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
             <div class="plasma-sphere bg-slate-500 mb-2 sm:mb-4 flex items-center justify-center"></div>
-            <span class="text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <span class="card-title-text text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <div class="skeleton-title-bar" aria-hidden="true"></div>
         </a>
 
         <!-- Slot 2 -->
-        <a href="#" data-slot="2" class="invisible cosmic-card p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+        <a href="#" data-slot="2" data-card-id="card2" aria-busy="true" class="cosmic-card is-loading p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+            <button type="button" class="card-bookmark-btn" data-bookmark-slot="2" data-card-id="card2" aria-label="スロット2をブックマーク" title="ブックマーク">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="w-3.5 h-3.5 sm:w-4 sm:h-4 bookmark-icon">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
             <div class="plasma-sphere bg-slate-500 mb-2 sm:mb-4 flex items-center justify-center"></div>
-            <span class="text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <span class="card-title-text text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <div class="skeleton-title-bar" aria-hidden="true"></div>
         </a>
 
         <!-- Slot 3 -->
-        <a href="#" data-slot="3" class="invisible cosmic-card p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+        <a href="#" data-slot="3" data-card-id="card3" aria-busy="true" class="cosmic-card is-loading p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+            <button type="button" class="card-bookmark-btn" data-bookmark-slot="3" data-card-id="card3" aria-label="スロット3をブックマーク" title="ブックマーク">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="w-3.5 h-3.5 sm:w-4 sm:h-4 bookmark-icon">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
             <div class="plasma-sphere bg-slate-500 mb-2 sm:mb-4 flex items-center justify-center"></div>
-            <span class="text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <span class="card-title-text text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <div class="skeleton-title-bar" aria-hidden="true"></div>
         </a>
 
         <!-- Slot 4 -->
-        <a href="#" data-slot="4" class="invisible cosmic-card p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+        <a href="#" data-slot="4" data-card-id="card4" aria-busy="true" class="cosmic-card is-loading p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+            <button type="button" class="card-bookmark-btn" data-bookmark-slot="4" data-card-id="card4" aria-label="スロット4をブックマーク" title="ブックマーク">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="w-3.5 h-3.5 sm:w-4 sm:h-4 bookmark-icon">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
             <div class="plasma-sphere bg-slate-500 mb-2 sm:mb-4 flex items-center justify-center"></div>
-            <span class="text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <span class="card-title-text text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <div class="skeleton-title-bar" aria-hidden="true"></div>
         </a>
 
         <!-- Slot 5 -->
-        <a href="#" data-slot="5" class="invisible cosmic-card p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+        <a href="#" data-slot="5" data-card-id="card5" aria-busy="true" class="cosmic-card is-loading p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+            <button type="button" class="card-bookmark-btn" data-bookmark-slot="5" data-card-id="card5" aria-label="スロット5をブックマーク" title="ブックマーク">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="w-3.5 h-3.5 sm:w-4 sm:h-4 bookmark-icon">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
             <div class="plasma-sphere bg-slate-500 mb-2 sm:mb-4 flex items-center justify-center"></div>
-            <span class="text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <span class="card-title-text text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <div class="skeleton-title-bar" aria-hidden="true"></div>
         </a>
 
         <!-- Slot 6 -->
-        <a href="#" data-slot="6" class="invisible cosmic-card p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+        <a href="#" data-slot="6" data-card-id="card6" aria-busy="true" class="cosmic-card is-loading p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+            <button type="button" class="card-bookmark-btn" data-bookmark-slot="6" data-card-id="card6" aria-label="スロット6をブックマーク" title="ブックマーク">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="w-3.5 h-3.5 sm:w-4 sm:h-4 bookmark-icon">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
             <div class="plasma-sphere bg-slate-500 mb-2 sm:mb-4 flex items-center justify-center"></div>
-            <span class="text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <span class="card-title-text text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <div class="skeleton-title-bar" aria-hidden="true"></div>
         </a>
 
         <!-- Slot 7 -->
-        <a href="#" data-slot="7" class="invisible cosmic-card p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+        <a href="#" data-slot="7" data-card-id="card7" aria-busy="true" class="cosmic-card is-loading p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+            <button type="button" class="card-bookmark-btn" data-bookmark-slot="7" data-card-id="card7" aria-label="スロット7をブックマーク" title="ブックマーク">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="w-3.5 h-3.5 sm:w-4 sm:h-4 bookmark-icon">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
             <div class="plasma-sphere bg-slate-500 mb-2 sm:mb-4 flex items-center justify-center"></div>
-            <span class="text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <span class="card-title-text text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <div class="skeleton-title-bar" aria-hidden="true"></div>
         </a>
 
         <!-- Slot 8 -->
-        <a href="#" data-slot="8" class="invisible cosmic-card p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+        <a href="#" data-slot="8" data-card-id="card8" aria-busy="true" class="cosmic-card is-loading p-3 sm:p-6 flex flex-col items-center justify-center text-center group text-slate-500 default-text-color">
+            <button type="button" class="card-bookmark-btn" data-bookmark-slot="8" data-card-id="card8" aria-label="スロット8をブックマーク" title="ブックマーク">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="w-3.5 h-3.5 sm:w-4 sm:h-4 bookmark-icon">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </button>
             <div class="plasma-sphere bg-slate-500 mb-2 sm:mb-4 flex items-center justify-center"></div>
-            <span class="text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <span class="card-title-text text-[13px] font-medium text-slate-200 leading-tight tracking-wide"></span>
+            <div class="skeleton-title-bar" aria-hidden="true"></div>
         </a>
 
     </main>
 
+    <!-- Highlights View (SPA Route: /highlights) -->
+    <section id="highlights-view" class="hidden w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl px-4 relative z-10 flex-1 min-h-0 flex flex-col pt-1" aria-label="ハイライト一覧">
+        <!-- Scrollable Highlights List Container -->
+        <div id="highlights-list-container" class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 custom-scrollbar pb-2">
+            <!-- Dynamically populated via index.js -->
+        </div>
+    </section>
+
+    <!-- Bookmarks View (SPA Route: /bookmarks) -->
+    <section id="bookmarks-view" class="hidden w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl px-4 relative z-10 flex-1 min-h-0 flex flex-col pt-1" aria-label="ブックマーク一覧">
+        <!-- Scrollable Bookmarks List Container -->
+        <div id="bookmarks-list-container" class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 custom-scrollbar pb-2">
+            <!-- Dynamically populated via index.js -->
+        </div>
+    </section>
+
+    <!-- Archives View (SPA Route: /archives) -->
+    <section id="archives-view" class="hidden w-full max-w-md landscape:max-w-4xl sm:max-w-xl md:max-w-4xl px-4 relative z-10 flex-1 min-h-0 flex flex-col pt-1" aria-label="アーカイブ一覧">
+        <!-- Scrollable Archives List Container -->
+        <div id="archives-list-container" class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 custom-scrollbar pb-2">
+            <!-- Dynamically populated via index.js -->
+        </div>
+    </section>
+
     <!-- Footer Area -->
-    <footer id="footer-trigger" class="mt-2 mb-2 text-center relative z-10 flex-shrink-0 select-none cursor-default">
-        <div class="inline-block py-2 rounded-full bg-slate-900/50 border border-slate-700/50 backdrop-blur-md">
-            <p class="text-[9px] tracking-[0.4em] font-light text-slate-400 uppercase">Knowledge Portal // Ehime Univ. Museum</p>
+    <footer class="mt-2 mb-2 text-center relative z-10 flex-shrink-0 select-none cursor-default">
+        <div class="inline-flex items-center justify-center gap-2">
+            <a
+                href="https://www.ehime-u.ac.jp/contact-list/"
+                target="_blank"
+                rel="noopener noreferrer"
+                id="footer-contact-link"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/60 hover:bg-slate-800/80 text-[11px] font-normal text-slate-300 hover:text-cyan-200 backdrop-blur-md transition-all duration-200 cursor-pointer shadow-sm whitespace-nowrap group"
+                title="愛媛大学 お問い合わせ"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400 group-hover:text-cyan-300 transition-colors">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                <span>お問い合わせ</span>
+            </a>
         </div>
     </footer>
 
-    <script src="index.js" defer></script>
+    <!-- Cache Clear & Reload Button (Bottom Left Corner: Reload/Refresh Pictogram) -->
+    <button
+        id="cache-reload-button"
+        class="cache-reload-button group"
+        type="button"
+        aria-label="強制キャッシュクリアと再読み込み"
+        title="強制キャッシュクリア＆再読み込み"
+    >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-slate-400 group-hover:text-cyan-300 group-[.reloading]:text-cyan-200 transition-colors">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M8 16H3v5" />
+        </svg>
+    </button>
+
+    <!-- Admin Trigger Button (Bottom Right Corner: Tool Pictogram, 2s Long-Press) -->
+    <button
+        id="admin-trigger-button"
+        class="admin-trigger-button group"
+        type="button"
+        aria-label="管理者ツール"
+    >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-slate-400 group-hover:text-cyan-300 group-[.pressing]:text-cyan-200 transition-colors">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+        </svg>
+    </button>
+
+    <!-- Bookmark Removal Confirmation Dialog -->
+    <div
+        id="bookmark-remove-dialog"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden transition-opacity duration-200"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bookmark-remove-dialog-title"
+        aria-describedby="bookmark-remove-dialog-desc"
+    >
+        <div
+            id="bookmark-remove-dialog-panel"
+            class="cosmic-card w-full max-w-sm p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl text-left"
+        >
+            <div class="flex items-start gap-3 mb-3">
+                <div class="w-9 h-9 rounded-full bg-rose-950/80 border border-rose-500/40 flex items-center justify-center flex-shrink-0 text-rose-400">
+                    <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                        <line x1="9" y1="10" x2="15" y2="10"></line>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 id="bookmark-remove-dialog-title" class="text-sm font-semibold text-slate-100 leading-snug">
+                        ブックマークを解除しますか？
+                    </h3>
+                    <p id="bookmark-remove-dialog-desc" class="text-xs text-slate-400 mt-1 leading-relaxed">
+                        このアイテムをブックマーク一覧から削除します。
+                    </p>
+                </div>
+            </div>
+
+            <!-- Target item preview -->
+            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 mb-4 flex items-center gap-2.5">
+                <div class="flex-1 min-w-0">
+                    <p id="bookmark-remove-target-title" class="text-xs font-medium text-slate-200 truncate"></p>
+                    <span id="bookmark-remove-target-id" class="text-[10px] font-mono text-cyan-400 block mt-0.5"></span>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex items-center justify-end gap-2">
+                <button
+                    type="button"
+                    id="bookmark-remove-cancel-btn"
+                    class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/90 border border-slate-700/60 text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
+                >
+                    キャンセル
+                </button>
+                <button
+                    type="button"
+                    id="bookmark-remove-confirm-btn"
+                    class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-950/50 hover:shadow-rose-900/60 transition-all cursor-pointer"
+                >
+                    解除する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UTM Bookmark Added / Navigation Confirmation Dialog -->
+    <div
+        id="bookmark-utm-dialog"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden transition-opacity duration-200"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bookmark-utm-dialog-title"
+        aria-describedby="bookmark-utm-dialog-desc"
+    >
+        <div
+            id="bookmark-utm-dialog-panel"
+            class="cosmic-card w-full max-w-sm p-4 sm:p-5 rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl text-left"
+        >
+            <div class="flex items-start gap-3 mb-3">
+                <div id="bookmark-utm-icon-container" class="w-9 h-9 rounded-full bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center flex-shrink-0 text-emerald-400 aspect-square">
+                    <svg id="bookmark-utm-icon-svg" viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                        <polyline points="9 11 12 14 22 4"></polyline>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 id="bookmark-utm-dialog-title" class="text-sm font-semibold text-slate-100 leading-snug">
+                        ブックマークに追加しました
+                    </h3>
+                    <p id="bookmark-utm-dialog-desc" class="text-xs text-slate-400 mt-1 leading-relaxed">
+                        このアイテムをブックマークに追加しました。今すぐリンク先を開きますか？
+                    </p>
+                </div>
+            </div>
+
+            <!-- Target item preview -->
+            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 mb-4 flex items-center gap-2.5">
+                <div class="flex-1 min-w-0">
+                    <p id="bookmark-utm-target-title" class="text-xs font-medium text-slate-200 truncate"></p>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <span id="bookmark-utm-target-id" class="text-[10px] font-mono text-cyan-400"></span>
+                        <span id="bookmark-utm-target-url-preview" class="text-[10px] text-slate-500 truncate"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex items-center justify-end gap-2">
+                <button
+                    type="button"
+                    id="bookmark-utm-stay-btn"
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/90 border border-slate-700/60 text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
+                >
+                    ポータルにとどまる
+                </button>
+                <button
+                    type="button"
+                    id="bookmark-utm-open-btn"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-lg shadow-cyan-950/50 hover:shadow-cyan-900/60 transition-all cursor-pointer"
+                >
+                    <span id="bookmark-utm-open-btn-text">ページを開く</span>
+                    <svg id="bookmark-utm-open-btn-external-icon" viewBox="0 0 24 24" class="w-3.5 h-3.5 hidden" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="index.js?v=20260917_09" defer></script>
 </body>
 </html>
